@@ -1,0 +1,3 @@
+# mvnw runs on Linux (Docker), so it must keep Unix line endings
+mvnw text eol=lf
+*.cmd text eol=crlf

@@ -1,0 +1,14 @@
+# Maven build output
+target/
+
+# IntelliJ
+.idea/
+*.iml
+
+# Frontend (later)
+node_modules/
+dist/
+
+# OS junk
+.DS_Store
+Thumbs.db
