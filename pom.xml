@@ -25,6 +25,6 @@
 
     <modules>
         <module>engine</module>
-        <!-- server gets added here later -->
+        <module>server</module>
     </modules>
 </project>
