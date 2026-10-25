@@ -27,15 +27,12 @@ public class Order {
     public long getId() {
         return id;
     }
-
     public String getSymbol() {
         return symbol;
     }
-
     public Side getSide() {
         return side;
     }
-
     public long getQuantity() {
         return quantity;
     }
@@ -45,7 +42,6 @@ public class Order {
     public long getPrice() {
         return price;
     }
-
     public OrderType getType() {
         return type;
     }
