@@ -1,5 +1,7 @@
 # Clyde Exchange
 
+[![CI](https://github.com/MannanHanda/clyde-exchange/actions/workflows/ci.yml/badge.svg)](https://github.com/MannanHanda/clyde-exchange/actions/workflows/ci.yml)
+
 A stock exchange simulator written in Java 21. At its core is a **price-time priority matching engine**: the same basic mechanism real exchanges use to decide who trades with whom, at what price, and in what order.
 
 Bots trade against each other around the clock, and a live dashboard built with [Perspective](https://perspective.finos.org/) (the streaming analytics library open-sourced by J.P. Morgan) shows the order book, price chart and trade tape. You can trade against the bots from the browser.
