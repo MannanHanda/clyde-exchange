@@ -78,6 +78,19 @@ public class OrderBook {
         return trades;
     }
 
+    BookSnapshot snapshot(String symbol, int depth) {
+        return new BookSnapshot(symbol, topLevels(bids, depth), topLevels(asks, depth));
+    }
+
+    private static List<BookSnapshot.Level> topLevels(TreeMap<Long, PriceLevel> side, int depth) {
+        List<BookSnapshot.Level> levels = new ArrayList<>();
+        for (PriceLevel level : side.values()) {   // values() walks the map in sorted order, best first
+            if (levels.size() == depth) break;
+            levels.add(new BookSnapshot.Level(level.getPrice(), level.getTotalQty()));
+        }
+        return levels;
+    }
+
     boolean cancel(long orderId) {
         Order order = ordersById.remove(orderId);
         if (order == null) return false; // unknown, already filled, or already cancelled

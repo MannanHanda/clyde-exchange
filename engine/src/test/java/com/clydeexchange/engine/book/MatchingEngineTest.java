@@ -128,6 +128,28 @@ public class MatchingEngineTest {
     }
 
     @Test
+    void snapshotShowsBestLevelsFirstWithTotals(){
+        engine.submit("MANN", Side.BUY,  OrderType.LIMIT, 99, 10);
+        engine.submit("MANN", Side.BUY,  OrderType.LIMIT, 98, 5);
+        engine.submit("MANN", Side.BUY,  OrderType.LIMIT, 99, 15);
+        engine.submit("MANN", Side.SELL, OrderType.LIMIT, 101, 7);
+        engine.submit("MANN", Side.SELL, OrderType.LIMIT, 102, 3);
+
+        BookSnapshot snap = engine.snapshot("MANN", 10);
+
+        assertEquals(List.of(new BookSnapshot.Level(99, 25), new BookSnapshot.Level(98, 5)), snap.bids());
+        assertEquals(List.of(new BookSnapshot.Level(101, 7), new BookSnapshot.Level(102, 3)), snap.asks());
+    }
+
+    @Test
+    void snapshotRespectsDepth(){
+        engine.submit("MANN", Side.SELL, OrderType.LIMIT, 101, 1);
+        engine.submit("MANN", Side.SELL, OrderType.LIMIT, 102, 1);
+        engine.submit("MANN", Side.SELL, OrderType.LIMIT, 103, 1);
+        assertEquals(2, engine.snapshot("MANN", 2).asks().size());
+    }
+
+    @Test
     void rejectedOrderDoesNotUseUpAnId(){
         long first = engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 10).orderId();
         assertThrows(IllegalArgumentException.class,

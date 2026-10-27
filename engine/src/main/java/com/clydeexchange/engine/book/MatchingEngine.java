@@ -15,7 +15,7 @@ public class MatchingEngine {
 
     public record SubmitResult(long orderId, List<Trade> trades) {}
 
-    private final Map<String, OrderBook> books = new HashMap<>();
+    private final Map<String, OrderBook> books = new LinkedHashMap<>(); // keeps symbols in config order
     private long nextOrderId = 1;
 
     public MatchingEngine(Collection<String> symbols){
@@ -41,6 +41,13 @@ public class MatchingEngine {
         OrderBook book = books.get(symbol);
         if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
         return book.cancel(orderId);
+    }
+
+    public BookSnapshot snapshot(String symbol, int depth){
+        OrderBook book = books.get(symbol);
+        if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
+        if (depth <= 0) throw new IllegalArgumentException("Depth must be > 0, was " + depth);
+        return book.snapshot(symbol, depth);
     }
 
     public Set<String> symbols(){
