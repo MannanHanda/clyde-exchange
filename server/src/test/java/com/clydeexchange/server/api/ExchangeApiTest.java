@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /** Drives the real HTTP layer (JSON in, JSON out) against a fresh exchange for each test. */
-@SpringBootTest
+@SpringBootTest(properties = "exchange.sim.enabled=false")   // no bots, so the book only has our orders
 @AutoConfigureMockMvc
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 class ExchangeApiTest {

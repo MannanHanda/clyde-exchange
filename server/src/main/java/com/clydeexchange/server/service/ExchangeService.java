@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.function.Consumer;
 
 /**
  * The single doorway into the engine.
@@ -20,7 +21,7 @@ import java.util.concurrent.*;
  * No locks in our code, and every order is processed in one well-defined sequence.
  */
 @Service
-public class ExchangeService implements AutoCloseable {
+public class ExchangeService implements OrderGateway, AutoCloseable {
 
     public record OrderResult(long orderId, List<TradeRecord> trades) {}
 
@@ -28,6 +29,7 @@ public class ExchangeService implements AutoCloseable {
 
     private final MatchingEngine engine;
     private final Map<String, Deque<TradeRecord>> recentTrades = new HashMap<>();
+    private final List<Consumer<TradeRecord>> tradeListeners = new CopyOnWriteArrayList<>();
     private final ExecutorService writer = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "exchange-writer");
         thread.setDaemon(true);
@@ -39,6 +41,15 @@ public class ExchangeService implements AutoCloseable {
         for (String symbol : symbols) recentTrades.put(symbol, new ArrayDeque<>());
     }
 
+    /**
+     * Listeners are called ON THE WRITER THREAD for every trade, so they must be quick and never
+     * block (e.g. just add to a queue). Anything slow would hold up matching for everyone.
+     */
+    public void addTradeListener(Consumer<TradeRecord> listener) {
+        tradeListeners.add(listener);
+    }
+
+    @Override
     public OrderResult placeOrder(String symbol, Side side, OrderType type, long price, long qty) {
         return onWriter(() -> {
             MatchingEngine.SubmitResult result = engine.submit(symbol, side, type, price, qty);
@@ -48,11 +59,13 @@ public class ExchangeService implements AutoCloseable {
                 TradeRecord record = new TradeRecord(symbol, t.buyOrderId(), t.sellOrderId(), t.price(), t.qty(), now);
                 trades.add(record);
                 remember(record);
+                for (Consumer<TradeRecord> listener : tradeListeners) listener.accept(record);
             }
             return new OrderResult(result.orderId(), trades);
         });
     }
 
+    @Override
     public boolean cancelOrder(String symbol, long orderId) {
         return onWriter(() -> engine.cancel(symbol, orderId));
     }

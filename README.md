@@ -2,7 +2,7 @@
 
 A stock exchange simulator written in Java 21. At its core is a **price-time priority matching engine**: the same basic mechanism real exchanges use to decide who trades with whom, at what price, and in what order.
 
-> **Status: work in progress.** The matching engine (limit and market orders, cancels, validation, multiple symbols) and the REST API are complete and tested. Live market data, trading bots and dashboard are designed but not built yet. See [Status](#status).
+> **Status: work in progress.** The matching engine, REST API, live WebSocket feed and trading bots are complete and tested. The dashboard is next. See [Status](#status).
 
 ---
 
@@ -100,6 +100,23 @@ curl -X POST localhost:8080/api/orders -H 'Content-Type: application/json' \
 curl localhost:8080/api/book/MANN     # asks: [{"price":10100,"qty":20}]
 ```
 
+## Live market data and bots
+
+When the server starts, bots trade `MANN` and `CLYD` on their own (turn them off with `exchange.sim.enabled: false`):
+
+- **Fair value:** each symbol has a hidden "true" price that takes a small random step every 250 ms (a random walk).
+- **Market maker:** always quotes 3 levels of bids just below fair value and asks just above it, and re-quotes every tick. This is the liquidity everyone else trades against.
+- **Noise traders:** randomly send market orders (which create trades) and limit orders near fair value (which add depth). Their stale orders are cancelled.
+
+Connect to `ws://localhost:8080/ws/market` to receive, at most every 200 ms:
+
+```json
+{"type":"trades","trades":[{"symbol":"MANN","buyOrderId":1751,"sellOrderId":1822,"price":9903,"qty":6,"timestamp":1793076835022}]}
+{"type":"book","book":{"symbol":"MANN","bids":[{"price":9895,"qty":74}],"asks":[{"price":9903,"qty":180}]}}
+```
+
+**Why batched?** The matching thread never touches the network. It drops each trade into a lock-free queue, and a separate timer sends batches. A slow browser can't slow down matching, and the browser gets at most 5 updates a second instead of one per trade.
+
 ## Project layout
 
 ```
@@ -109,6 +126,8 @@ engine/   matching engine (plain Java)
 server/   Spring Boot application
   service/  ExchangeService (single writer), TradeRecord
   api/      OrderController, MarketDataController, error handling
+  ws/       MarketDataPublisher (batched WebSocket feed)
+  sim/      FairValueModel, MarketMakerBot, NoiseTraderBot, SimulatorRunner
 ```
 
 ---
@@ -122,7 +141,7 @@ server/   Spring Boot application
 | `OrderBook`: bids/asks, limit-order matching | ✅ done, tested |
 | Market orders, cancels, `MatchingEngine` (validation, ids, one book per symbol) | ✅ done, tested |
 | REST API + single-writer `ExchangeService` (incl. 8-thread concurrency test) | ✅ done, tested |
-| WebSocket market data + trading bots | ⏳ planned |
+| WebSocket market data + trading bots (market maker, noise traders, random-walk fair value) | ✅ done, tested |
 | Perspective dashboard | ⏳ planned |
 
 ## Known limitations

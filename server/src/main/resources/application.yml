@@ -1,6 +1,10 @@
 spring:
   application:
     name: clyde-exchange
+  task:
+    scheduling:
+      pool:
+        size: 2   # one thread for the bots, one for publishing market data
 
 server:
   port: 8080
@@ -8,3 +12,8 @@ server:
 exchange:
   # Prices everywhere are in ticks of 1p, so 10050 = £100.50
   symbols: MANN, CLYD
+  sim:
+    enabled: true
+    start-prices:   # where each symbol's fair value starts its random walk
+      MANN: 10000
+      CLYD: 5000
