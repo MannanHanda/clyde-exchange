@@ -1,10 +1,9 @@
 package com.clydeexchange.engine.book;
 import com.clydeexchange.engine.model.Order;
 import com.clydeexchange.engine.model.Side;
+import com.clydeexchange.engine.model.Trade;
 
-import java.util.Comparator;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 public class OrderBook {
     private final TreeMap<Long, PriceLevel> bids;
@@ -34,6 +33,39 @@ public class OrderBook {
     PriceLevel bestAsk(){
         Map.Entry<Long, PriceLevel> best = asks.firstEntry();
         return (best == null) ? null : best.getValue();
+    }
+
+    List<Trade> match (Order incoming){
+        List<Trade> trades = new ArrayList<>();
+        TreeMap<Long, PriceLevel> opposite = (incoming.getSide() == Side.BUY) ? asks : bids;
+
+        while (!incoming.isFilled()){
+            // 1. anyone there at all?
+            Map.Entry<Long, PriceLevel> best = opposite.firstEntry();
+            boolean isAnyoneThere = best != null;
+            if (!isAnyoneThere) break;
+            PriceLevel bestLevel = best.getValue();
+
+            // 2. do the prices cross?
+            boolean doesItCross = (incoming.getSide() == Side.BUY) ? (incoming.getPrice() >= bestLevel.getPrice()) : (incoming.getPrice() <= bestLevel.getPrice());
+            if (!doesItCross) break;
+
+            // 3. trade with the front ticket, at the resting price
+            Order resting = bestLevel.peek();
+            long buyId  = (incoming.getSide() == Side.BUY) ? incoming.getId() : resting.getId();
+            long sellId = (incoming.getSide() == Side.BUY) ? resting.getId()  : incoming.getId();
+            long qty = Math.min(incoming.getRemaining(), resting.getRemaining());
+            incoming.fill(qty);
+            bestLevel.fillFront(qty);
+            trades.add(new Trade(buyId, sellId, bestLevel.getPrice(), qty));
+
+            // 4. queue empty? remove it
+            if (bestLevel.isEmpty()) opposite.remove(bestLevel.getPrice());
+        }
+
+        // 5. any shares left? join my side's queue
+        if (!incoming.isFilled()) rest(incoming);
+        return trades;
     }
 
 
