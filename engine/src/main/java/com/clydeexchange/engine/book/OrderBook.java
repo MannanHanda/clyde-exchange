@@ -9,6 +9,7 @@ import java.util.*;
 public class OrderBook {
     private final TreeMap<Long, PriceLevel> bids;
     private final TreeMap<Long, PriceLevel> asks;
+    private final Map<Long, Order> ordersById = new HashMap<>();
 
     public OrderBook() {
         this.bids = new TreeMap<>(Comparator.reverseOrder());
@@ -24,6 +25,7 @@ public class OrderBook {
             level = newlevel;
         }
         level.add(order);
+        ordersById.put(order.getId(), order);
     }
 
     PriceLevel bestBid() {
@@ -64,6 +66,7 @@ public class OrderBook {
             long qty = Math.min(incoming.getRemaining(), resting.getRemaining());
             incoming.fill(qty);
             bestLevel.fillFront(qty);
+            if (resting.isFilled()) ordersById.remove(resting.getId());
             trades.add(new Trade(buyId, sellId, bestLevel.getPrice(), qty));
 
             // 4. queue empty? remove it
@@ -75,6 +78,15 @@ public class OrderBook {
         return trades;
     }
 
-}
+    boolean cancel(long orderId) {
+        Order order = ordersById.remove(orderId);
+        if (order == null) return false; // unknown, already filled, or already cancelled
 
-//   
+        TreeMap<Long, PriceLevel> side = (order.getSide() == Side.BUY) ? bids : asks;
+        PriceLevel level = side.get(order.getPrice());
+        level.remove(order);
+        if (level.isEmpty()) side.remove(order.getPrice());
+        return true;
+    }
+
+}

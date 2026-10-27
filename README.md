@@ -2,7 +2,7 @@
 
 A stock exchange simulator written in Java 21. At its core is a **price-time priority matching engine**: the same basic mechanism real exchanges use to decide who trades with whom, at what price, and in what order.
 
-> **Status: work in progress.** The order model, price levels and limit-order matching are built and tested. Market orders, cancels, the REST API, live market data, trading bots and dashboard are designed but not built yet. See [Status](#status).
+> **Status: work in progress.** The matching engine is complete and tested (limit and market orders, cancels, validation, multiple symbols). The REST API, live market data, trading bots and dashboard are designed but not built yet. See [Status](#status).
 
 ---
 
@@ -82,7 +82,7 @@ You need JDK 21. Maven is not required, because the project includes the Maven W
 ```
 engine/   matching engine (plain Java)
   model/    Order, Side, OrderType, Trade
-  book/     PriceLevel, OrderBook
+  book/     PriceLevel, OrderBook, MatchingEngine
 server/   Spring Boot application
 ```
 
@@ -95,7 +95,7 @@ server/   Spring Boot application
 | `Order`: fill logic with overfill/negative guards | ✅ done, tested |
 | `PriceLevel`: FIFO queue + cached total | ✅ done, tested |
 | `OrderBook`: bids/asks, limit-order matching | ✅ done, tested |
-| Market orders, cancels, `MatchingEngine` | ⏳ planned |
+| Market orders, cancels, `MatchingEngine` (validation, ids, one book per symbol) | ✅ done, tested |
 | REST API + single-writer service | ⏳ planned |
 | WebSocket market data + trading bots | ⏳ planned |
 | Perspective dashboard | ⏳ planned |

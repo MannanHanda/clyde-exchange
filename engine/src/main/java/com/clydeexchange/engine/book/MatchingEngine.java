@@ -36,6 +36,13 @@ public class MatchingEngine {
         return new SubmitResult(order.getId(), trades);
     }
 
+    /** Returns true if the order was resting and is now removed; false if unknown or already filled. */
+    public boolean cancel(String symbol, long orderId){
+        OrderBook book = books.get(symbol);
+        if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
+        return book.cancel(orderId);
+    }
+
     public Set<String> symbols(){
         return Collections.unmodifiableSet(books.keySet());
     }

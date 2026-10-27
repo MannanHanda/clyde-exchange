@@ -79,6 +79,55 @@ public class MatchingEngineTest {
     }
 
     @Test
+    void cancelledOrderCanNoLongerTrade(){
+        long sellId = engine.submit("MANN", Side.SELL, OrderType.LIMIT, 100, 10).orderId();
+        assertTrue(engine.cancel("MANN", sellId));
+        List<Trade> trades = engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 10).trades();
+        assertTrue(trades.isEmpty());
+    }
+
+    @Test
+    void cancelUnknownIdReturnsFalse(){
+        assertFalse(engine.cancel("MANN", 999));
+    }
+
+    @Test
+    void cancelFilledOrderReturnsFalse(){
+        long sellId = engine.submit("MANN", Side.SELL, OrderType.LIMIT, 100, 10).orderId();
+        engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 10);
+        assertFalse(engine.cancel("MANN", sellId));
+    }
+
+    @Test
+    void cancelTwiceReturnsFalseTheSecondTime(){
+        long sellId = engine.submit("MANN", Side.SELL, OrderType.LIMIT, 100, 10).orderId();
+        assertTrue(engine.cancel("MANN", sellId));
+        assertFalse(engine.cancel("MANN", sellId));
+    }
+
+    @Test
+    void cancelPartiallyFilledOrderRemovesOnlyWhatIsLeft(){
+        long sellId = engine.submit("MANN", Side.SELL, OrderType.LIMIT, 100, 30).orderId();
+        engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 10);
+        assertTrue(engine.cancel("MANN", sellId));
+        assertTrue(engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 5).trades().isEmpty());
+    }
+
+    @Test
+    void cancelKeepsOtherOrdersInTheQueue(){
+        long alice = engine.submit("MANN", Side.SELL, OrderType.LIMIT, 100, 10).orderId();
+        long bob   = engine.submit("MANN", Side.SELL, OrderType.LIMIT, 100, 10).orderId();
+        engine.cancel("MANN", alice);
+        List<Trade> trades = engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 10).trades();
+        assertEquals(bob, trades.get(0).sellOrderId());
+    }
+
+    @Test
+    void cancelOnUnknownSymbolIsRejected(){
+        assertThrows(IllegalArgumentException.class, () -> engine.cancel("NOPE", 1));
+    }
+
+    @Test
     void rejectedOrderDoesNotUseUpAnId(){
         long first = engine.submit("MANN", Side.BUY, OrderType.LIMIT, 100, 10).orderId();
         assertThrows(IllegalArgumentException.class,

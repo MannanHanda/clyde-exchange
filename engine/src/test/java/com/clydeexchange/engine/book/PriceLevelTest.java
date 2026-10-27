@@ -52,6 +52,19 @@ public class PriceLevelTest {
     }
 
     @Test
+    void removeSubtractsOnlyRemainingQty(){
+        PriceLevel level = new PriceLevel(100);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
+        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT);
+        level.add(alice);
+        level.add(bob);
+        level.fillFront(20);   // Alice has 30 left
+        level.remove(alice);
+        assertEquals(30, level.getTotalQty());
+        assertSame(bob, level.peek());
+    }
+
+    @Test
     void emptyTest(){
         PriceLevel level = new PriceLevel(100);
         Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);

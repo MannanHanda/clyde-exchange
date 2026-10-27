@@ -32,6 +32,11 @@ public class PriceLevel {
         }
     }
 
+    void remove(Order order){
+        orders.remove(order);
+        totalQty -= order.getRemaining();
+    }
+
     boolean isEmpty(){return orders.isEmpty();}
     long getPrice() {return price;}
     long getTotalQty() {return totalQty;}
