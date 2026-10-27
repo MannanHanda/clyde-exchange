@@ -5,7 +5,7 @@ target/
 .idea/
 *.iml
 
-# Frontend (later)
+# Frontend
 node_modules/
 dist/
 

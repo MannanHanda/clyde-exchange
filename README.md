@@ -2,7 +2,9 @@
 
 A stock exchange simulator written in Java 21. At its core is a **price-time priority matching engine**: the same basic mechanism real exchanges use to decide who trades with whom, at what price, and in what order.
 
-> **Status: work in progress.** The matching engine, REST API, live WebSocket feed and trading bots are complete and tested. The dashboard is next. See [Status](#status).
+Bots trade against each other around the clock, and a live dashboard built with [Perspective](https://perspective.finos.org/) (the streaming analytics library open-sourced by J.P. Morgan) shows the order book, price chart and trade tape. You can trade against the bots from the browser.
+
+![Clyde Exchange dashboard](docs/dashboard.png)
 
 ---
 
@@ -69,12 +71,15 @@ flowchart LR
 
 ## Running it
 
-You need JDK 21. Maven is not required, because the project includes the Maven Wrapper.
+You need JDK 21 and Node 22+. Maven is not required, because the project includes the Maven Wrapper.
 
 ```bash
 ./mvnw test                 # run all tests (Windows: .\mvnw test)
 ./mvnw -pl engine test      # engine tests only
-./mvnw -pl server spring-boot:run   # start the server on :8080
+
+./mvnw install -DskipTests && ./mvnw -pl server spring-boot:run   # 1. exchange + bots on :8080
+
+cd web && npm install && npm run dev                              # 2. dashboard on http://localhost:5173
 ```
 
 ## REST API
@@ -117,6 +122,17 @@ Connect to `ws://localhost:8080/ws/market` to receive, at most every 200 ms:
 
 **Why batched?** The matching thread never touches the network. It drops each trade into a lock-free queue, and a separate timer sends batches. A slow browser can't slow down matching, and the browser gets at most 5 updates a second instead of one per trade.
 
+## Dashboard
+
+`web/` is a small React app built with Vite. Perspective does the heavy lifting: it runs a columnar data engine in WebAssembly inside a Web Worker, so the browser can filter, sort and aggregate thousands of streaming rows without blocking the page.
+
+- **One stream, many views.** `useMarketData` opens the WebSocket (reconnecting with exponential backoff) and writes into two in-browser Perspective tables: `trades` (capped at 20,000 rows) and `book` (indexed by `symbol:level`, so each snapshot overwrites rows in place). Every panel is a `<perspective-viewer>` over one of those tables with a different config. Switching symbol just changes a filter.
+- **Order book:** best 10 levels each side, with in-cell bars showing size at each price.
+- **Price chart:** the last trade price per second, using Perspective's `bucket()` expression and a `last` aggregate.
+- **Trade tape:** newest first, with the aggressor side. The server doesn't send a side, but order ids only go up, so the newer of the buy and sell ids is the order that arrived and crossed the spread.
+- **Order ticket:** sends real `MARKET` or `LIMIT` orders to `POST /api/orders` and reports the fills.
+- On page load it backfills the last 500 trades per symbol over REST, de-duplicating against the live stream.
+
 ## Project layout
 
 ```
@@ -128,6 +144,10 @@ server/   Spring Boot application
   api/      OrderController, MarketDataController, error handling
   ws/       MarketDataPublisher (batched WebSocket feed)
   sim/      FairValueModel, MarketMakerBot, NoiseTraderBot, SimulatorRunner
+web/      React + Vite + Perspective dashboard
+  src/perspective.js    starts Perspective (WebAssembly) and creates the tables
+  src/useMarketData.js  WebSocket + REST backfill -> tables
+  src/App.jsx           layout and the viewer configs
 ```
 
 ---
@@ -142,7 +162,7 @@ server/   Spring Boot application
 | Market orders, cancels, `MatchingEngine` (validation, ids, one book per symbol) | ✅ done, tested |
 | REST API + single-writer `ExchangeService` (incl. 8-thread concurrency test) | ✅ done, tested |
 | WebSocket market data + trading bots (market maker, noise traders, random-walk fair value) | ✅ done, tested |
-| Perspective dashboard | ⏳ planned |
+| Perspective dashboard: order book, price chart, trade tape, order ticket | ✅ done, verified in browser |
 
 ## Known limitations
 
