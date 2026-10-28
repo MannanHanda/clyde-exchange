@@ -6,7 +6,7 @@ A stock exchange simulator written in Java 21. At its core is a **price-time pri
 
 Bots trade against each other around the clock, and a live dashboard built with [Perspective](https://perspective.finos.org/) (the streaming analytics library open-sourced by J.P. Morgan) shows the order book, price chart and trade tape. You can trade against the bots from the browser.
 
-![Clyde Exchange dashboard](docs/dashboard.png)
+![Clyde Exchange live demo: bots trading, then a 300-share market buy sweeping the ask side](docs/demo.gif)
 
 ---
 
@@ -134,6 +134,8 @@ Connect to `ws://localhost:8080/ws/market` to receive, at most every 200 ms:
 - **Trade tape:** newest first, with the aggressor side. The server doesn't send a side, but order ids only go up, so the newer of the buy and sell ids is the order that arrived and crossed the spread.
 - **Order ticket:** sends real `MARKET` or `LIMIT` orders to `POST /api/orders` and reports the fills.
 - On page load it backfills the last 500 trades per symbol over REST, de-duplicating against the live stream.
+
+![Dashboard screenshot](docs/dashboard.png)
 
 ## Project layout
 
