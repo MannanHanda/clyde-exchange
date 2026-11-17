@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { bookTable, tradesTable } from "./perspective.js";
+import { bookTable, candlesTable, tradesTable } from "./perspective.js";
 import { BOOK_DEPTH, useMarketData } from "./useMarketData.js";
 import Viewer from "./Viewer.jsx";
 import OrderTicket from "./OrderTicket.jsx";
@@ -8,6 +8,7 @@ import Watchlist from "./Watchlist.jsx";
 import News from "./News.jsx";
 import { useAccount } from "./useAccount.js";
 import { changePercent, useMarket } from "./useMarket.js";
+import { INTERVALS, useCandles } from "./useCandles.js";
 
 const GREEN = "#26a69a";
 const RED = "#ef5350";
@@ -29,7 +30,7 @@ function bookConfig(symbol) {
     };
 }
 
-function chartConfig(symbol) {
+function liveChartConfig(symbol) {
     return {
         plugin: "Y Line",
         title: `${symbol} price (last trade per second)`,
@@ -38,6 +39,17 @@ function chartConfig(symbol) {
         columns: ["price"],
         aggregates: { price: "last" },
         filter: [["symbol", "==", symbol]],
+    };
+}
+
+function candleChartConfig(symbol, interval) {
+    return {
+        plugin: "Candlestick",
+        title: `${symbol} price (${interval} candles)`,
+        group_by: ["time"],
+        columns: ["open", "close", "high", "low"],   // the order the Candlestick plugin expects
+        aggregates: { open: "last", close: "last", high: "last", low: "last" },   // one row per candle anyway
+        filter: [["symbol", "==", symbol], ["interval", "==", interval]],
     };
 }
 
@@ -54,7 +66,7 @@ function tapeConfig(symbol) {
 
 const price = (ticks) => `£${(ticks / 100).toFixed(2)}`;
 
-/** The selected symbol in the header: name, price, change, and the range and volume since the server started. */
+/** The selected symbol in the header: name, price, change, and today's range and volume (days are UTC days). */
 function Quote({ row }) {
     const [now, setNow] = useState(Date.now());
     useEffect(() => {
@@ -86,11 +98,17 @@ export default function App() {
     const { market, news } = useMarket();
     const account = useAccount();
     const [picked, setPicked] = useState(null);
+    const [interval, setChartInterval] = useState("1m");   // "live" = the per-second line of trades
     const symbol = picked ?? symbols[0] ?? "MANN";
+    const live = interval === "live";
+    useCandles(symbol, live ? null : interval);
     const row = market.find((r) => r.symbol === symbol);
 
     const book = useMemo(() => bookConfig(symbol), [symbol]);
-    const chart = useMemo(() => chartConfig(symbol), [symbol]);
+    const chart = useMemo(
+        () => (live ? liveChartConfig(symbol) : candleChartConfig(symbol, interval)),
+        [symbol, interval, live],
+    );
     const tape = useMemo(() => tapeConfig(symbol), [symbol]);
 
     return (
@@ -121,7 +139,16 @@ export default function App() {
                 </section>
                 <section className="centre">
                     <div className="panel chart">
-                        <Viewer table={tradesTable} config={chart} />
+                        <div className="intervals">
+                            {["live", ...INTERVALS].map((choice) => (
+                                <button key={choice} className={choice === interval ? "active" : ""}
+                                        onClick={() => setChartInterval(choice)}>
+                                    {choice === "live" ? "Live" : choice}
+                                </button>
+                            ))}
+                        </div>
+                        {/* A viewer is tied to one table, so switching between trades and candles needs a new viewer */}
+                        <Viewer key={live ? "trades" : "candles"} table={live ? tradesTable : candlesTable} config={chart} />
                     </div>
                     <div className="panel">
                         <Portfolio account={account} onSelect={setPicked} />

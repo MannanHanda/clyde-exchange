@@ -25,19 +25,33 @@ public class Account {
 
     private final String id;
     private final boolean unlimited;
+    private final boolean bot;
     private long cash;
     private long realisedPnl;
     private final Map<String, Position> positions = new LinkedHashMap<>();
     private final Deque<Fill> fills = new ArrayDeque<>();
 
     /**
-     * @param unlimited true for the simulator's bots: they skip the buying-power checks (so they can
-     *                  go short and overdrawn), but their cash, positions and profit are still tracked
+     * @param unlimited true for the market maker and noise bots: they skip the buying-power checks (so they
+     *                  can go short and overdrawn), but their cash, positions and profit are still tracked
+     * @param bot       true for every account the simulator runs. A bot's fills and open orders are not
+     *                  saved to the database: there are far too many, and it places new orders every tick
      */
-    public Account(String id, long startingCash, boolean unlimited) {
+    public Account(String id, long startingCash, boolean unlimited, boolean bot) {
         this.id = id;
         this.cash = startingCash;
         this.unlimited = unlimited;
+        this.bot = bot;
+    }
+
+    /** An account as it was when the server last saved it. fills are newest first. */
+    public static Account restore(String id, boolean unlimited, boolean bot, long cash, long realisedPnl,
+                                  Map<String, Position> positions, List<Fill> fills) {
+        Account account = new Account(id, cash, unlimited, bot);
+        account.realisedPnl = realisedPnl;
+        account.positions.putAll(positions);
+        fills.stream().limit(FILL_HISTORY).forEach(account.fills::addLast);
+        return account;
     }
 
     public void applyFill(Fill fill) {
@@ -57,6 +71,7 @@ public class Account {
 
     public String id() { return id; }
     public boolean unlimited() { return unlimited; }
+    public boolean bot() { return bot; }
     public long cash() { return cash; }
     public long realisedPnl() { return realisedPnl; }
 

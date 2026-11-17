@@ -1,0 +1,5 @@
+# Loaded on top of the main application.yml while the tests run.
+# Every test context gets its own empty in-memory database, so tests never touch ./data and never see each other's rows.
+spring:
+  datasource:
+    url: jdbc:h2:mem:${random.uuid};DB_CLOSE_DELAY=-1

@@ -4,7 +4,12 @@ spring:
   task:
     scheduling:
       pool:
-        size: 2   # one thread for the bots, one for publishing market data
+        size: 3   # one thread for the bots, one for publishing market data, one for saving to the database
+  datasource:
+    # Where the exchange's state is saved. The default is an H2 database: a single file in ./data, no setup.
+    # To use PostgreSQL instead, set the environment variables SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME
+    # and SPRING_DATASOURCE_PASSWORD (docker-compose.yml does this). Delete ./data to start the market afresh.
+    url: jdbc:h2:file:./data/clyde
 
 server:
   port: 8080

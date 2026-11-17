@@ -32,7 +32,11 @@ export function useMarket() {
     return { market, news };
 }
 
-/** Percent change of the last price from the first trade since the server started. 0 before anything trades. */
+/**
+ * Percent change of the last price today: measured from yesterday's close, like a real exchange.
+ * On the market's very first day there is no yesterday, so it is measured from the first trade instead.
+ */
 export function changePercent(row) {
-    return row.open > 0 ? ((row.last - row.open) / row.open) * 100 : 0;
+    const from = row.previousClose || row.open;
+    return from > 0 ? ((row.last - from) / from) * 100 : 0;
 }

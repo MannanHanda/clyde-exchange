@@ -6,6 +6,8 @@ A stock exchange simulator written in Java 21. At its core is a **price-time pri
 
 Ten made-up companies in five sectors trade around the clock. Bots with different strategies trade against each other, news stories move prices, and a circuit breaker halts a share that moves too fast. A live dashboard built with [Perspective](https://perspective.finos.org/) (the streaming analytics library open-sourced by J.P. Morgan) shows the watchlist, news, order book, price chart and trade tape. You get a paper-trading account with £100,000 of pretend money and can trade against the bots from the browser, with your cash, positions and profit tracked live.
 
+Everything is saved to a database once a second, so the market can be restarted, or crash, and carry on where it was. It runs as a pair of Docker containers with `docker compose up`.
+
 ![Clyde Exchange live demo: bots trading, then a 300-share market buy sweeping the ask side](docs/demo.gif)
 
 ---
@@ -19,11 +21,14 @@ flowchart LR
     end
 
     subgraph server["server/ (Spring Boot)"]
-        REST["REST API<br/>/api/orders, /api/market, /api/news, /api/accounts"]
+        REST["REST API<br/>/api/orders, /api/market, /api/candles, /api/accounts"]
         WS["WebSocket<br/>/ws/market"]
         BOTS["Simulator<br/>price model, news, 5 kinds of bot"]
         SVC["ExchangeService<br/>single writer thread<br/>risk check, accounts, circuit breaker"]
+        SAVE["StateSaver<br/>once a second"]
     end
+
+    DB[("H2 file or<br/>PostgreSQL")]
 
     subgraph engine["engine/ (plain Java, no frameworks)"]
         ME["MatchingEngine<br/>one OrderBook per symbol"]
@@ -38,6 +43,8 @@ flowchart LR
     SVC --> ME
     ME --> OB --> PL
     SVC -- "engine events" --> WS
+    SVC -- "what changed" --> SAVE --> DB
+    DB -- "on startup" --> SVC
 ```
 
 ### Why it's split this way
@@ -82,7 +89,8 @@ Every order carries an `accountId`, and every trade moves cash from the buyer to
 - **Profit and loss.** Positions use the average-cost method. Selling realises profit against the average price paid; what you still hold is valued at the last trade price (unrealised).
 - **Stops are reserved too.** A waiting sell stop holds its shares and a waiting buy stop-limit holds its cash, so the order can always be honoured when it triggers. A trader can't place a buy stop *without* a limit, because nobody can say in advance what it would cost.
 - **Bots have accounts too.** The market maker and noise traders (`bot-maker`, `bot-noise-1`…) skip the risk check, so they can go short. The value, momentum and investor bots get a fixed pot of cash and shares and pass the same risk check as you, so they can run out of money.
-- **Trader accounts** are listed in `application.yml` under `exchange.accounts.starting-cash`. There is no login yet; the dashboard trades as `mannan`.
+- **Trader accounts** are listed in `application.yml` under `exchange.accounts.starting-cash`. The starting cash is only given when the account is first created; after that the saved balance is used. There is no login yet; the dashboard trades as `mannan`.
+- **At most 200 open orders** per trader, so nobody can fill the server's memory with orders.
 
 ---
 
@@ -91,6 +99,26 @@ Every order carries an `accountId`, and every trade moves cash from the buyer to
 Each symbol has its own circuit breaker, like the "limit up / limit down" rules on real exchanges. If the price moves **5% or more within 60 seconds**, trading in that symbol is **halted for 15 seconds**: new orders are rejected with a message, cancels are still allowed, and the other symbols carry on. A headline goes on the news feed. The numbers are set in `application.yml` under `exchange.circuit-breaker`.
 
 The check runs on the single writer thread right after each trade, so no order can slip in between the trade that trips the breaker and the halt.
+
+---
+
+## Persistence: surviving a restart
+
+The exchange trades in memory and saves to a SQL database a moment later (a pattern called *write-behind*).
+
+- **The matching thread never touches the database.** As trades happen it only notes *what changed*: which accounts, which candles, any new fills. Once a second a separate `StateSaver` thread collects those changes and writes them in **one transaction**. A slow database can't slow down trading, and the database always holds one consistent snapshot, never half of one.
+- **On startup** the server loads the snapshot: every account's cash and positions, traders' open orders (put back on the book with their original ids) and fills, each symbol's last price and day statistics, the candles and the news. The bots then carry on from the last price.
+- **What is lost in a crash:** at most the last second. On a normal shutdown there is one final save, so nothing is lost. The bots' own open orders and the individual trades between bots are deliberately not saved: the bots re-quote within a second, and the candles summarise the trades.
+- **If the database goes away,** trading carries on. Unsaved snapshots queue up and are written in order when it comes back.
+- **Two databases, one set of SQL.** By default it is an [H2](https://h2database.com) database in a single file (`./data/clyde.mv.db`), so there is nothing to install. Set `SPRING_DATASOURCE_URL` and it uses PostgreSQL instead. The tables are created by [Flyway](https://flywaydb.org/) from `server/src/main/resources/db/migration`. `PostgresTest` starts a real PostgreSQL and runs a full save-and-restart against it, so the SQL is checked on both.
+- **The service doesn't know about SQL.** `ExchangeService` talks to a small `ExchangeStore` interface; `JdbcExchangeStore` is the only class with SQL in it. Most tests run the exchange with no store at all.
+
+Delete the `data/` folder to start the market afresh.
+
+## Candles and the trading day
+
+- **Candles.** Every trade updates a 1-minute and a 1-hour candle (open, high, low, close, volume) for its symbol. The server keeps the newest 1,440 one-minute candles (a day) and 720 one-hour candles (a month) per symbol in memory. `GET /api/candles/{symbol}` builds 5m and 15m candles from the 1-minute ones, and 4h and 1d candles from the 1-hour ones.
+- **Trading day.** The market never closes, so a "day" is a calendar day in UTC. At midnight each symbol's open, high, low and volume start again and the last price is remembered as the **previous close**. The change % on the dashboard is measured from the previous close, as on a real exchange.
 
 ---
 
@@ -107,6 +135,14 @@ You need JDK 21 and Node 22+. Maven is not required, because the project include
 cd web && npm install && npm run dev                              # 2. dashboard on http://localhost:5173
 ```
 
+Or, with Docker, the exchange, the dashboard and a PostgreSQL database in one command:
+
+```bash
+docker compose up --build -d      # then open http://localhost:8080
+```
+
+[docs/deploy.md](docs/deploy.md) explains what is kept across restarts and how to run it on a server around the clock.
+
 ## REST API
 
 All prices are in **ticks of 1p** (`10100` = £101.00). Symbols are configured in `server/src/main/resources/application.yml`.
@@ -118,9 +154,11 @@ All prices are in **ticks of 1p** (`10100` = £101.00). Symbols are configured i
 | `GET` | `/api/accounts/{id}` | Cash, buying power, positions, profit/loss, open orders and recent fills |
 | `GET` | `/api/book/{symbol}?depth=10` | Top price levels on each side, best first |
 | `GET` | `/api/trades/{symbol}?limit=50` | Recent trades, newest first |
-| `GET` | `/api/market` | One row per symbol: name, sector, last, open, high, low, volume, and whether it is halted |
+| `GET` | `/api/market` | One row per symbol: name, sector, last, today's open, high, low and volume, the previous close, and whether it is halted |
+| `GET` | `/api/candles/{symbol}?interval=1m&limit=300` | Price history, oldest first. `interval` is `1m`, `5m`, `15m`, `1h`, `4h` or `1d`. Each candle has `start`, `open`, `high`, `low`, `close`, `volume`. |
 | `GET` | `/api/news?limit=20` | Latest headlines, newest first |
 | `GET` | `/api/symbols` | Tradable symbols |
+| `GET` | `/actuator/health` | `{"status":"UP"}` while the server and its database connection are healthy |
 
 Invalid or unaffordable orders get `400 Bad Request` with a message, e.g. `{"detail":"Quantity must be > 0, was 0"}` or `{"detail":"Insufficient shares: trying to sell 80 MANN but only 60 available"}`.
 
@@ -172,11 +210,11 @@ Connect to `ws://localhost:8080/ws/market` to receive, at most every 200 ms:
 
 `web/` is a small React app built with Vite. Perspective does the heavy lifting: it runs a columnar data engine in WebAssembly inside a Web Worker, so the browser can filter, sort and aggregate thousands of streaming rows without blocking the page.
 
-- **One stream, many views.** `useMarketData` opens the WebSocket (reconnecting with exponential backoff) and writes into two in-browser Perspective tables: `trades` (capped at 60,000 rows) and `book` (indexed by `symbol:level`, so each snapshot overwrites rows in place). Every panel is a `<perspective-viewer>` over one of those tables with a different config. Switching symbol just changes a filter.
+- **One stream, many views.** `useMarketData` opens the WebSocket (reconnecting with exponential backoff) and writes into two in-browser Perspective tables: `trades` (capped at 60,000 rows) and `book` (indexed by `symbol:level`, so each snapshot overwrites rows in place). A third table, `candles`, is filled from `GET /api/candles`. Every panel is a `<perspective-viewer>` over one of those tables with a different config. Switching symbol just changes a filter.
 - **Watchlist:** every symbol grouped by sector with its last price and change, and a `HALTED` badge while its circuit breaker is tripped. Click a symbol to trade it. It polls `GET /api/market` once a second.
 - **News:** the latest headlines. Click a company story to jump to that symbol.
 - **Order book:** best 10 levels each side, with in-cell bars showing size at each price.
-- **Price chart:** the last trade price per second, using Perspective's `bucket()` expression and a `last` aggregate.
+- **Price chart:** a candlestick chart of the price history, with buttons for 1m, 5m, 15m, 1h, 4h and 1d candles. Because candles are saved, the history is still there after a restart. The `Live` button shows the last trade price per second instead, using Perspective's `bucket()` expression and a `last` aggregate.
 - **Trade tape:** newest first, with the aggressor side. The server doesn't send a side, but order ids only go up, so the newer of the buy and sell ids is the order that arrived and crossed the spread.
 - **Order ticket:** sends real `MARKET`, `LIMIT`, `STOP` or `STOP_LIMIT` orders to `POST /api/orders` and reports what filled, what is waiting and what was cancelled. It is disabled while the symbol is halted.
 - **Portfolio:** account value, cash, buying power and profit/loss, plus tabs for your positions, open orders (with a cancel button, and including waiting stops) and recent fills. It polls `GET /api/accounts/{id}` once a second.
@@ -191,10 +229,12 @@ engine/   matching engine (plain Java)
   model/    Order, Side, OrderType, Trade
   book/     PriceLevel, OrderBook, MatchingEngine, BookSnapshot, OpenOrder
 server/   Spring Boot application
-  service/  ExchangeService (single writer, risk check, settlement), CircuitBreaker, Instrument, MarketSummary, TradeRecord
+  service/  ExchangeService (single writer, risk check, settlement), CircuitBreaker, Instrument, MarketSummary, TradeRecord,
+            Candle, CandleSeries, ExchangeStore (what the service needs from a database)
+  store/    JdbcExchangeStore, JdbcNewsStore (the SQL), StateSaver (saves once a second)
   account/  Account, Position (average cost, profit/loss), AccountView
   api/      OrderController, MarketDataController, AccountController, error handling
-  news/     NewsFeed (latest headlines)
+  news/     NewsFeed (latest headlines), NewsStore
   ws/       MarketDataPublisher (batched WebSocket feed)
   sim/      PriceModel, Simulator, SimulatorRunner, and the bots: MarketMakerBot, NoiseTraderBot,
             ValueTraderBot, MomentumBot, InvestorBot
@@ -203,11 +243,13 @@ web/      React + Vite + Perspective dashboard
   src/useMarketData.js  WebSocket + REST backfill -> tables
   src/useMarket.js      polls the market summary and the news
   src/useAccount.js     polls the account
+  src/useCandles.js     polls the candles for the chart
   src/Watchlist.jsx     symbols by sector
   src/News.jsx          headlines
   src/OrderTicket.jsx   market, limit and stop orders
   src/Portfolio.jsx     cash, positions, open orders, fills
   src/App.jsx           layout and the viewer configs
+Dockerfile, docker-compose.yml   the exchange and PostgreSQL as containers (see docs/deploy.md)
 ```
 
 ---
@@ -230,15 +272,20 @@ web/      React + Vite + Perspective dashboard
 | Value, momentum and investor bots with limited money; one-hour simulation test | ✅ done, tested |
 | Per-symbol circuit breaker and news feed | ✅ done, tested |
 | Watchlist, news panel, stop orders in the ticket | ✅ done, verified in browser |
+| Persistence: accounts, open orders, fills, prices and news survive a restart (H2 or PostgreSQL) | ✅ done, tested on both |
+| Candles (1m to 1d), UTC trading days with previous close, candlestick chart | ✅ done, tested, verified in browser |
+| Memory and database caps for running for months | ✅ done, tested |
+| Dockerfile and docker-compose (exchange + PostgreSQL) | ⚠️ written, not yet run |
 
 ## Known limitations
 
 - No login: the API trusts the `accountId` it is given.
-- No persistence. The book and all account balances live in memory and are lost on restart.
+- A crash (not a normal shutdown) can lose up to the last second of activity.
+- Only the newest state is saved, not the full order log, so the exact book can't be replayed (see Kafka in the roadmap).
 - No short selling or margin for traders (the market maker and noise traders can go short).
 - Trading simply resumes after a halt. Real exchanges reopen with an auction.
 - A trader can't place a buy stop without a limit price, and there are no linked orders (such as "one cancels the other").
-- "Open" in the market summary means the first trade since the server started, not a daily open. There are no trading days yet.
+- The market never closes: a trading day is simply a UTC calendar day, with no opening or closing auction.
 - Cancelling an order is O(k) in the number of orders at its price level.
 
 ## Roadmap

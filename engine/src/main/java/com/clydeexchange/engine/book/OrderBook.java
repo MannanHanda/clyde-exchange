@@ -147,6 +147,31 @@ public class OrderBook {
         return lastTradePrice;
     }
 
+    /**
+     * Puts back an order that was open before a restart, exactly as it was: same id, same remaining
+     * quantity, and no matching. Only valid on a book where it cannot cross anything (in practice an empty one).
+     */
+    void restore(OpenOrder saved) {
+        if (saved.type() == OrderType.STOP || saved.type() == OrderType.STOP_LIMIT) {
+            addStop(new StopOrder(saved.orderId(), saved.accountId(), saved.symbol(), saved.side(),
+                    saved.stopPrice(), saved.price(), saved.remaining()));
+            return;
+        }
+        Order order = new Order(saved.orderId(), saved.symbol(), saved.side(), saved.price(), saved.quantity(),
+                saved.type(), saved.accountId());
+        long alreadyFilled = saved.quantity() - saved.remaining();
+        if (alreadyFilled > 0) order.fill(alreadyFilled);
+        rest(order);
+    }
+
+    void restoreLastTradePrice(long price) {
+        lastTradePrice = price;
+    }
+
+    int openOrderCount() {
+        return ordersById.size() + stops.size();
+    }
+
     boolean cancel(long orderId) {
         if (stops.remove(orderId) != null) return true;
         Order order = ordersById.remove(orderId);

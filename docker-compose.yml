@@ -1,0 +1,35 @@
+# The exchange and its database, as two containers:   docker compose up --build -d
+# Then open http://localhost:8080. See docs/deploy.md.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: clyde
+      POSTGRES_USER: clyde
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clyde}   # set POSTGRES_PASSWORD in a .env file on a real server
+    volumes:
+      - db-data:/var/lib/postgresql/data   # the market's state lives here and survives "docker compose down"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U clyde -d clyde"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  exchange:
+    build: .
+    restart: unless-stopped   # come back after a crash or a reboot: this is what makes it 24/7
+    depends_on:
+      db:
+        condition: service_healthy   # do not start until PostgreSQL accepts connections
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/clyde
+      SPRING_DATASOURCE_USERNAME: clyde
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-clyde}
+    ports:
+      - "8080:8080"
+    stop_grace_period: 20s   # time for the final save when the container is stopped
+
+volumes:
+  db-data:

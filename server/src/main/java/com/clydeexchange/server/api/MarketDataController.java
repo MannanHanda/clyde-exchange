@@ -2,6 +2,7 @@ package com.clydeexchange.server.api;
 
 import com.clydeexchange.engine.book.BookSnapshot;
 import com.clydeexchange.server.news.NewsFeed;
+import com.clydeexchange.server.service.Candle;
 import com.clydeexchange.server.service.ExchangeService;
 import com.clydeexchange.server.service.MarketSummary;
 import com.clydeexchange.server.service.TradeRecord;
@@ -41,6 +42,13 @@ public class MarketDataController {
     @GetMapping("/book/{symbol}")
     public BookSnapshot book(@PathVariable String symbol, @RequestParam(defaultValue = "10") int depth) {
         return exchange.book(symbol, depth);
+    }
+
+    /** Price history for charts, oldest first. interval is 1m, 5m, 15m, 1h, 4h or 1d. */
+    @GetMapping("/candles/{symbol}")
+    public List<Candle> candles(@PathVariable String symbol, @RequestParam(defaultValue = "1m") String interval,
+                                @RequestParam(defaultValue = "300") int limit) {
+        return exchange.candles(symbol, interval, limit);
     }
 
     @GetMapping("/trades/{symbol}")

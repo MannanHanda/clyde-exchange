@@ -105,6 +105,49 @@ public class MatchingEngine {
         return open;
     }
 
+    /** How many orders are open (resting or waiting stops) across all symbols. */
+    public int openOrderCount(){
+        int count = 0;
+        for (OrderBook book : books.values()) count += book.openOrderCount();
+        return count;
+    }
+
+    /** The id the next order will get. Saved by the server so ids carry on, not restart at 1, after a restart. */
+    public long nextOrderId(){
+        return nextOrderId;
+    }
+
+    // --- Restoring after a restart. The server calls these once, before any new order is accepted. ---
+
+    /** Ids only ever move forward: asking for a lower number than the current one does nothing. */
+    public void startOrderIdsAt(long nextOrderId){
+        this.nextOrderId = Math.max(this.nextOrderId, nextOrderId);
+    }
+
+    /** Tells a book what its last trade price was, so stop orders keep working from where they left off. */
+    public void restoreLastTradePrice(String symbol, long price){
+        OrderBook book = books.get(symbol);
+        if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
+        if (price < 0) throw new IllegalArgumentException("Price must be >= 0, was " + price);
+        book.restoreLastTradePrice(price);
+    }
+
+    /**
+     * Puts back an order that was open before a restart, with its old id and remaining quantity.
+     * It is placed straight on the book (or among the waiting stops) without matching, so this must
+     * happen before anyone else has orders in: an order that was resting cannot cross an empty book.
+     */
+    public void restoreOrder(OpenOrder saved){
+        OrderBook book = books.get(saved.symbol());
+        if (book == null) throw new IllegalArgumentException("Unknown symbol " + saved.symbol());
+        if (saved.remaining() <= 0 || saved.remaining() > saved.quantity()) {
+            throw new IllegalArgumentException("Bad remaining quantity " + saved.remaining() + " on order " + saved.orderId());
+        }
+        if (book.openOrder(saved.orderId()) != null) throw new IllegalArgumentException("Order " + saved.orderId() + " is already open");
+        book.restore(saved);
+        startOrderIdsAt(saved.orderId() + 1);
+    }
+
     /** What a market buy of this size would cost right now (or the cost of the whole ask side, if smaller). */
     public long marketBuyCost(String symbol, long qty){
         OrderBook book = books.get(symbol);

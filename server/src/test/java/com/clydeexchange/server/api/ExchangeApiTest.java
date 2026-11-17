@@ -155,6 +155,32 @@ class ExchangeApiTest {
     }
 
     @Test
+    void candlesShowThePriceHistory() throws Exception {
+        placeOrder("""
+            {"accountId":"maker","symbol":"MANN","side":"SELL","type":"LIMIT","price":10000,"qty":30}""");
+        placeOrder("""
+            {"accountId":"alice","symbol":"MANN","side":"BUY","type":"LIMIT","price":10000,"qty":10}""");
+
+        mvc.perform(get("/api/candles/MANN"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1))
+            .andExpect(jsonPath("$[0].open").value(10000))
+            .andExpect(jsonPath("$[0].close").value(10000))
+            .andExpect(jsonPath("$[0].volume").value(10));
+        mvc.perform(get("/api/candles/MANN?interval=1d&limit=5")).andExpect(jsonPath("$.length()").value(1));
+        mvc.perform(get("/api/candles/CLYD")).andExpect(jsonPath("$.length()").value(0));
+        mvc.perform(get("/api/candles/MANN?interval=2m")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/market")).andExpect(jsonPath("$[0].previousClose").value(0));
+    }
+
+    @Test
+    void theHealthCheckSaysTheServerAndItsDatabaseAreUp() throws Exception {
+        mvc.perform(get("/actuator/health"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("UP"));
+    }
+
+    @Test
     void stopOrderWaitsThenSellsWhenThePriceFalls() throws Exception {
         placeOrder("""
             {"accountId":"maker","symbol":"MANN","side":"SELL","type":"LIMIT","price":10000,"qty":10}""");

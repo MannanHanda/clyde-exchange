@@ -45,10 +45,12 @@ class SimulationTest {
         Map<String, Double> gapMax = new HashMap<>();
         Map<String, Double> spreadSum = new HashMap<>();
         int samples = 0;
+        int mostOpenOrders = 0;
 
         for (int tick = 1; tick <= TICKS; tick++) {
             now.addAndGet(250);
             simulator.tick();
+            if (tick % 240 == 0) mostOpenOrders = Math.max(mostOpenOrders, exchange.openOrderCount());
             if (tick % 20 != 0 || tick < 240) continue;   // sample every 5 seconds, after a minute to settle
 
             samples++;
@@ -79,7 +81,10 @@ class SimulationTest {
             assertTrue(averageGap < 0.02, symbol + " drifted from fair value: average gap " + averageGap);
             assertTrue(averageSpread < 0.01, symbol + " spread too wide: " + averageSpread);
         }
-        System.out.printf("%d headlines, %d halts%n", headlines.size(), halts.get());
+        System.out.printf("%d headlines, %d halts, at most %d open orders%n", headlines.size(), halts.get(), mostOpenOrders);
+
+        // A server that runs for months must not collect orders: the bots have to clear up after themselves
+        assertTrue(mostOpenOrders < 100 * INSTRUMENTS.size(), "open orders are piling up: " + mostOpenOrders);
 
         // The bots with limited money must never have spent cash or sold shares they did not have
         for (String bot : List.of(Simulator.VALUE, Simulator.MOMENTUM, Simulator.INVESTOR)) {

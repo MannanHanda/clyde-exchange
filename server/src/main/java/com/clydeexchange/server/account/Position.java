@@ -13,6 +13,14 @@ public class Position {
     private long qty;
     private long cost;
 
+    public Position() {}
+
+    /** A position loaded back from the database. */
+    public Position(long qty, long cost) {
+        this.qty = qty;
+        this.cost = cost;
+    }
+
     /**
      * @param signedQty +n for a buy of n shares, -n for a sell
      * @return the profit (or loss, if negative) this fill locked in; 0 if it only added to the position

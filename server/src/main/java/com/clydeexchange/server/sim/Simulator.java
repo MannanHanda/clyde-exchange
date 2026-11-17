@@ -44,20 +44,26 @@ public class Simulator {
     public Simulator(ExchangeService exchange, Random random, Consumer<PriceModel.Headline> news) {
         this.exchange = exchange;
         this.news = news;
-        this.model = new PriceModel(exchange.instruments(), random);
 
+        // After a restart the exchange remembers its last prices, so fair value carries on from there
+        Map<String, Long> lastPrices = new HashMap<>();
+        for (MarketSummary row : exchange.market()) lastPrices.put(row.symbol(), row.last());
+        this.model = new PriceModel(exchange.instruments(), random, lastPrices);
+
+        // Opening an account that already exists (restored from the database) does nothing and returns false.
+        // Only a brand-new account is given its starting shares, or the bots would get richer on every restart.
         exchange.openBotAccount(MAKER);
         NOISE.forEach(exchange::openBotAccount);
-        exchange.openAccount(VALUE, pounds(2_000_000));
-        exchange.openAccount(MOMENTUM, pounds(500_000));
-        exchange.openAccount(INVESTOR, pounds(2_000_000));
+        boolean newValue = exchange.openBotAccount(VALUE, pounds(2_000_000));
+        boolean newMomentum = exchange.openBotAccount(MOMENTUM, pounds(500_000));
+        boolean newInvestor = exchange.openBotAccount(INVESTOR, pounds(2_000_000));
 
         for (Instrument instrument : exchange.instruments()) {
             String symbol = instrument.symbol();
             long price = instrument.startPrice();
-            exchange.seedShares(VALUE, symbol, Sizing.shares(100_000, price), price);
-            exchange.seedShares(MOMENTUM, symbol, Sizing.shares(20_000, price), price);
-            exchange.seedShares(INVESTOR, symbol, Sizing.shares(100_000, price), price);
+            if (newValue) exchange.seedShares(VALUE, symbol, Sizing.shares(100_000, price), price);
+            if (newMomentum) exchange.seedShares(MOMENTUM, symbol, Sizing.shares(20_000, price), price);
+            if (newInvestor) exchange.seedShares(INVESTOR, symbol, Sizing.shares(100_000, price), price);
 
             List<Bot> cast = new ArrayList<>();
             cast.add(new MarketMakerBot(MAKER, symbol, exchange, random));   // first, so there is always a book to trade against

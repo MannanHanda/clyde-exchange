@@ -1,5 +1,5 @@
-// Perspective runs its data engine in a Web Worker (WebAssembly). We create two
-// in-browser tables once, here; the WebSocket hook writes into them and every
+// Perspective runs its data engine in a Web Worker (WebAssembly). We create three
+// in-browser tables once, here; the data hooks write into them and every
 // <perspective-viewer> on the page is a live view over one of them.
 import perspective from "@finos/perspective";
 import perspective_viewer from "@finos/perspective-viewer";
@@ -39,6 +39,22 @@ export const bookTable = await worker.table(
         bid: "float",
         ask: "float",
         ask_qty: "integer",
+    },
+    { index: "key" },
+);
+
+/** Price history: one row per (symbol, interval, candle). Indexed, so the candle still being built is updated in place. */
+export const candlesTable = await worker.table(
+    {
+        key: "string",
+        symbol: "string",
+        interval: "string",   // "1m", "5m", ... "1d"
+        time: "datetime",     // when the candle starts
+        open: "float",
+        close: "float",
+        high: "float",
+        low: "float",
+        volume: "integer",
     },
     { index: "key" },
 );

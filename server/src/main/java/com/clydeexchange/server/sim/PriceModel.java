@@ -78,8 +78,24 @@ public class PriceModel {
     private boolean stormy;
 
     public PriceModel(List<Instrument> instruments, Random random) {
+        this(instruments, random, Map.of());
+    }
+
+    /**
+     * @param currentPrices where each stock's fair value should begin, by symbol, in ticks. After a restart
+     *                      this is the last traded price, so the market carries on from where it stopped
+     *                      instead of jumping back to the start price. Symbols left out begin at their start price.
+     */
+    public PriceModel(List<Instrument> instruments, Random random, Map<String, Long> currentPrices) {
         this.random = random;
-        for (Instrument instrument : instruments) stocks.put(instrument.symbol(), new Stock(instrument));
+        for (Instrument instrument : instruments) {
+            Stock stock = new Stock(instrument);
+            Long current = currentPrices.get(instrument.symbol());
+            if (current != null && current > 0 && instrument.startPrice() > 0) {
+                stock.move = Math.log((double) current / instrument.startPrice());
+            }
+            stocks.put(instrument.symbol(), stock);
+        }
         this.sectors = instruments.stream().map(Instrument::sector).distinct().toList();
     }
 

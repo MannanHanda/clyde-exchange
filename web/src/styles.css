@@ -127,6 +127,20 @@ main {
 .story .when { color: var(--muted); font-size: 11px; }
 .story .headline { font-size: 13px; }
 .centre > .chart { flex: 1; }
+.panel.chart { display: flex; flex-direction: column; }
+.panel.chart perspective-viewer { flex: 1; min-height: 0; }
+.intervals { display: flex; gap: 4px; padding: 6px 8px 0; }
+.intervals button {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    padding: 2px 8px;
+}
+.intervals button.active { border-color: var(--accent); color: var(--text); background: #1e2633; }
 .centre > .panel:last-child { height: 300px; flex-shrink: 0; overflow: auto; }
 
 .panel {
