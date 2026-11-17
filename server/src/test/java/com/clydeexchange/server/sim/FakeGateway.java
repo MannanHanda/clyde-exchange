@@ -18,14 +18,14 @@ class FakeGateway implements OrderGateway {
     private long nextId = 1;
 
     @Override
-    public ExchangeService.OrderResult placeOrder(String symbol, Side side, OrderType type, long price, long qty) {
+    public ExchangeService.OrderResult placeOrder(String accountId, String symbol, Side side, OrderType type, long price, long qty) {
         Placed p = new Placed(nextId++, symbol, side, type, price, qty);
         placed.add(p);
-        return new ExchangeService.OrderResult(p.id(), List.of());
+        return new ExchangeService.OrderResult(p.id(), List.of(), 0);
     }
 
     @Override
-    public boolean cancelOrder(String symbol, long orderId) {
+    public boolean cancelOrder(String accountId, String symbol, long orderId) {
         cancelled.add(orderId);
         return true;
     }

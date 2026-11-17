@@ -20,6 +20,7 @@ public class NoiseTraderBot implements Bot {
 
     private record LiveOrder(long id, long placedAtTick) {}
 
+    private final String accountId;
     private final String symbol;
     private final OrderGateway exchange;
     private final Random random;
@@ -27,7 +28,8 @@ public class NoiseTraderBot implements Bot {
     private final Deque<LiveOrder> liveOrders = new ArrayDeque<>();
     private long tick = 0;
 
-    public NoiseTraderBot(String symbol, OrderGateway exchange, Random random, double activity) {
+    public NoiseTraderBot(String accountId, String symbol, OrderGateway exchange, Random random, double activity) {
+        this.accountId = accountId;
         this.symbol = symbol;
         this.exchange = exchange;
         this.random = random;
@@ -43,18 +45,18 @@ public class NoiseTraderBot implements Bot {
         Side side = random.nextBoolean() ? Side.BUY : Side.SELL;
         long qty = 5 + random.nextInt(36);
         if (random.nextDouble() < 0.6) {
-            exchange.placeOrder(symbol, side, OrderType.MARKET, 0, qty);
+            exchange.placeOrder(accountId, symbol, side, OrderType.MARKET, 0, qty);
         } else {
             long offset = random.nextInt((int) Math.max(2, fairValue / 500));   // within ~0.2%
             long price = Math.max(1, (side == Side.BUY) ? fairValue - offset : fairValue + offset);
-            long id = exchange.placeOrder(symbol, side, OrderType.LIMIT, price, qty).orderId();
+            long id = exchange.placeOrder(accountId, symbol, side, OrderType.LIMIT, price, qty).orderId();
             liveOrders.addLast(new LiveOrder(id, tick));
         }
     }
 
     private void cancelStaleOrders() {
         while (!liveOrders.isEmpty() && tick - liveOrders.peekFirst().placedAtTick() > ORDER_LIFETIME_TICKS) {
-            exchange.cancelOrder(symbol, liveOrders.pollFirst().id());
+            exchange.cancelOrder(accountId, symbol, liveOrders.pollFirst().id());
         }
     }
 }

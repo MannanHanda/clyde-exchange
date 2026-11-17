@@ -14,7 +14,7 @@ class BotTest {
     @Test
     void marketMakerAlwaysQuotesBidBelowAsk() {
         FakeGateway gateway = new FakeGateway();
-        MarketMakerBot mm = new MarketMakerBot("MANN", gateway, new Random(42));
+        MarketMakerBot mm = new MarketMakerBot("bot", "MANN", gateway, new Random(42));
 
         for (long fair : new long[] {10_000, 150, 2, 1}) {   // includes tiny prices
             gateway.placed.clear();
@@ -29,7 +29,7 @@ class BotTest {
     @Test
     void marketMakerCancelsItsOldQuotesBeforeRequoting() {
         FakeGateway gateway = new FakeGateway();
-        MarketMakerBot mm = new MarketMakerBot("MANN", gateway, new Random(42));
+        MarketMakerBot mm = new MarketMakerBot("bot", "MANN", gateway, new Random(42));
 
         mm.act(10_000);
         List<Long> firstQuotes = gateway.placed.stream().map(FakeGateway.Placed::id).toList();
@@ -41,7 +41,7 @@ class BotTest {
     @Test
     void noiseTraderOnlySendsValidOrdersAndCleansUpOldOnes() {
         FakeGateway gateway = new FakeGateway();
-        NoiseTraderBot noise = new NoiseTraderBot("MANN", gateway, new Random(7), 1.0);
+        NoiseTraderBot noise = new NoiseTraderBot("bot", "MANN", gateway, new Random(7), 1.0);
 
         for (int i = 0; i < 200; i++) noise.act(10_000);
 

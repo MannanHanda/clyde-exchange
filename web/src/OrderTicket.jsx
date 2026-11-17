@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ACCOUNT } from "./useAccount.js";
 
 /** Sends a real order to the exchange over REST, so you can trade against the bots. */
 export default function OrderTicket({ symbol }) {
@@ -10,7 +11,7 @@ export default function OrderTicket({ symbol }) {
 
     async function submit(e) {
         e.preventDefault();
-        const body = { symbol, side, type, qty: Number(qty) };
+        const body = { accountId: ACCOUNT, symbol, side, type, qty: Number(qty) };
         if (type === "LIMIT") body.price = Math.round(Number(price) * 100);   // pounds -> ticks
 
         const res = await fetch("/api/orders", {
@@ -24,10 +25,11 @@ export default function OrderTicket({ symbol }) {
             return;
         }
         const filled = json.trades.reduce((sum, t) => sum + t.qty, 0);
-        setResult({
-            ok: true,
-            text: `Order #${json.orderId}: filled ${filled} of ${qty} in ${json.trades.length} trade(s)`,
-        });
+        const cancelled = Number(qty) - filled - json.restingQty;
+        let text = `Order #${json.orderId}: filled ${filled} of ${qty} in ${json.trades.length} trade(s)`;
+        if (json.restingQty > 0) text += `, ${json.restingQty} waiting on the book`;
+        if (cancelled > 0) text += `, ${cancelled} cancelled`;
+        setResult({ ok: true, text });
     }
 
     return (

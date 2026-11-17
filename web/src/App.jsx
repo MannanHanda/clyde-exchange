@@ -3,6 +3,8 @@ import { bookTable, tradesTable } from "./perspective.js";
 import { BOOK_DEPTH, useMarketData } from "./useMarketData.js";
 import Viewer from "./Viewer.jsx";
 import OrderTicket from "./OrderTicket.jsx";
+import Portfolio from "./Portfolio.jsx";
+import { useAccount } from "./useAccount.js";
 
 const GREEN = "#26a69a";
 const RED = "#ef5350";
@@ -62,6 +64,7 @@ function SymbolTab({ symbol, stat, active, onClick }) {
 
 export default function App() {
     const { status, symbols, stats } = useMarketData();
+    const account = useAccount();
     const [picked, setPicked] = useState(null);
     const symbol = picked ?? symbols[0] ?? "MANN";
 
@@ -93,8 +96,13 @@ export default function App() {
                         <OrderTicket symbol={symbol} />
                     </div>
                 </section>
-                <section className="panel chart">
-                    <Viewer table={tradesTable} config={chart} />
+                <section className="centre">
+                    <div className="panel chart">
+                        <Viewer table={tradesTable} config={chart} />
+                    </div>
+                    <div className="panel">
+                        <Portfolio account={account} />
+                    </div>
                 </section>
                 <section className="panel tape">
                     <Viewer table={tradesTable} config={tape} />

@@ -8,8 +8,8 @@ public class PriceLevelTest {
     @Test
     void getTotalQtyTest(){
         PriceLevel level = new PriceLevel(100);
-        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
-        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT, "buyer");
+        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT, "buyer");
         level.add(alice);
         level.add(bob);
         assertEquals(80,level.getTotalQty());
@@ -18,8 +18,8 @@ public class PriceLevelTest {
     @Test
     void partialFillTest(){
         PriceLevel level = new PriceLevel(100);
-        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
-        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT, "buyer");
+        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT, "buyer");
         level.add(alice);
         level.add(bob);
         level.fillFront(20);
@@ -30,8 +30,8 @@ public class PriceLevelTest {
     @Test
     void fullFillTest(){
         PriceLevel level = new PriceLevel(100);
-        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
-        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT, "buyer");
+        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT, "buyer");
         level.add(alice);
         level.add(bob);
         level.fillFront(50);
@@ -43,8 +43,8 @@ public class PriceLevelTest {
     @Test
     void overfillFillTest(){
         PriceLevel level = new PriceLevel(100);
-        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
-        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT, "buyer");
+        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT, "buyer");
         level.add(alice);
         level.add(bob);
         assertThrows(IllegalArgumentException.class , () -> level.fillFront(70));
@@ -54,8 +54,8 @@ public class PriceLevelTest {
     @Test
     void removeSubtractsOnlyRemainingQty(){
         PriceLevel level = new PriceLevel(100);
-        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
-        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT, "buyer");
+        Order bob   = new Order(2, "MANN", Side.BUY, 100, 30, OrderType.LIMIT, "buyer");
         level.add(alice);
         level.add(bob);
         level.fillFront(20);   // Alice has 30 left
@@ -67,7 +67,7 @@ public class PriceLevelTest {
     @Test
     void emptyTest(){
         PriceLevel level = new PriceLevel(100);
-        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT);
+        Order alice = new Order(1, "MANN", Side.BUY, 100, 50, OrderType.LIMIT, "buyer");
         level.add(alice);
         level.fillFront(50);
         assertTrue(level.isEmpty());

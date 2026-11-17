@@ -17,12 +17,14 @@ public class MarketMakerBot implements Bot {
 
     private static final int LEVELS = 3;
 
+    private final String accountId;
     private final String symbol;
     private final OrderGateway exchange;
     private final Random random;
     private final List<Long> liveOrderIds = new ArrayList<>();
 
-    public MarketMakerBot(String symbol, OrderGateway exchange, Random random) {
+    public MarketMakerBot(String accountId, String symbol, OrderGateway exchange, Random random) {
+        this.accountId = accountId;
         this.symbol = symbol;
         this.exchange = exchange;
         this.random = random;
@@ -30,7 +32,7 @@ public class MarketMakerBot implements Bot {
 
     @Override
     public void act(long fairValue) {
-        for (long id : liveOrderIds) exchange.cancelOrder(symbol, id);   // false if already filled: fine
+        for (long id : liveOrderIds) exchange.cancelOrder(accountId, symbol, id);   // false if already filled: fine
         liveOrderIds.clear();
 
         long halfSpread = Math.max(1, fairValue / 2000);   // 0.05% each side, at least 1 tick
@@ -45,6 +47,6 @@ public class MarketMakerBot implements Bot {
 
     private void quote(Side side, long price) {
         long qty = 50 + random.nextInt(150);
-        liveOrderIds.add(exchange.placeOrder(symbol, side, OrderType.LIMIT, price, qty).orderId());
+        liveOrderIds.add(exchange.placeOrder(accountId, symbol, side, OrderType.LIMIT, price, qty).orderId());
     }
 }

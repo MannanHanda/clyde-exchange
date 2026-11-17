@@ -41,8 +41,10 @@ class MarketDataWebSocketTest {
                 }, "ws://localhost:" + port + "/ws/market")
                 .get(5, TimeUnit.SECONDS);
 
-        exchange.placeOrder("MANN", Side.SELL, OrderType.LIMIT, 10100, 10);
-        exchange.placeOrder("MANN", Side.BUY, OrderType.LIMIT, 10100, 10);
+        exchange.openBotAccount("seller");
+        exchange.openBotAccount("buyer");
+        exchange.placeOrder("seller", "MANN", Side.SELL, OrderType.LIMIT, 10100, 10);
+        exchange.placeOrder("buyer", "MANN", Side.BUY, OrderType.LIMIT, 10100, 10);
 
         String tradesMessage = null;
         long deadline = System.currentTimeMillis() + 5_000;

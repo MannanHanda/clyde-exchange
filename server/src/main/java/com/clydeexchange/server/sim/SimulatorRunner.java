@@ -14,6 +14,7 @@ import java.util.Random;
 /**
  * Spring's only job here is the clock: every 250 ms, move each symbol's fair value and let its bots act.
  * The bots are plain Java and go through ExchangeService like any other client.
+ * Each bot has its own account (shared across symbols), so its position and profit can be seen like anyone else's.
  * Turned off with exchange.sim.enabled=false (the API tests do this so the book stays predictable).
  */
 @Component
@@ -22,19 +23,24 @@ public class SimulatorRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SimulatorRunner.class);
 
+    private static final String MAKER = "bot-maker";
+    private static final List<String> NOISE = List.of("bot-noise-1", "bot-noise-2", "bot-noise-3");
+
     private record Market(FairValueModel fairValue, List<Bot> bots) {}
 
     private final List<Market> markets = new ArrayList<>();
 
     public SimulatorRunner(ExchangeService exchange, SimProperties props) {
         Random random = new Random();
+        exchange.openBotAccount(MAKER);
+        NOISE.forEach(exchange::openBotAccount);
         for (String symbol : exchange.symbols()) {
             long start = props.startPrices().getOrDefault(symbol, 10_000L);
             List<Bot> bots = List.of(
-                    new MarketMakerBot(symbol, exchange, random),
-                    new NoiseTraderBot(symbol, exchange, random, 0.6),
-                    new NoiseTraderBot(symbol, exchange, random, 0.6),
-                    new NoiseTraderBot(symbol, exchange, random, 0.3));
+                    new MarketMakerBot(MAKER, symbol, exchange, random),
+                    new NoiseTraderBot(NOISE.get(0), symbol, exchange, random, 0.6),
+                    new NoiseTraderBot(NOISE.get(1), symbol, exchange, random, 0.6),
+                    new NoiseTraderBot(NOISE.get(2), symbol, exchange, random, 0.3));
             markets.add(new Market(new FairValueModel(start, 0.001, random), bots));
         }
     }

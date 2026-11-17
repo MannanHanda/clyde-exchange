@@ -9,11 +9,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OrderBookMatchTest {
 
     private Order buy(long id, long price, long qty) {
-        return new Order(id, "MANN", Side.BUY, price, qty, OrderType.LIMIT);
+        return new Order(id, "MANN", Side.BUY, price, qty, OrderType.LIMIT, "buyer");
     }
 
     private Order sell(long id, long price, long qty) {
-        return new Order(id, "MANN", Side.SELL, price, qty, OrderType.LIMIT);
+        return new Order(id, "MANN", Side.SELL, price, qty, OrderType.LIMIT, "seller");
     }
 
     @Test
@@ -50,9 +50,9 @@ public class OrderBookMatchTest {
         List<Trade> trades = book.match(buy(4, 102, 60));
 
         assertEquals(3, trades.size());
-        assertEquals(new Trade(4, 1, 101, 30), trades.get(0));
-        assertEquals(new Trade(4, 2, 101, 20), trades.get(1));
-        assertEquals(new Trade(4, 3, 102, 10), trades.get(2));
+        assertEquals(new Trade(4, 1, 101, 30, "buyer", "seller"), trades.get(0));
+        assertEquals(new Trade(4, 2, 101, 20, "buyer", "seller"), trades.get(1));
+        assertEquals(new Trade(4, 3, 102, 10, "buyer", "seller"), trades.get(2));
         assertEquals(102, book.bestAsk().getPrice());   // the 101 level is gone
         assertEquals(30, book.bestAsk().getTotalQty()); // Dan has 30 left
         assertNull(book.bestBid());                     // buyer was fully filled, so nothing rests

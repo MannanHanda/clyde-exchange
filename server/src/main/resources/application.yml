@@ -12,6 +12,9 @@ server:
 exchange:
   # Prices everywhere are in ticks of 1p, so 10050 = £100.50
   symbols: MANN, CLYD
+  accounts:
+    starting-cash:   # traders, and the cash they start with in ticks: 10000000 = £100,000
+      mannan: 10000000
   sim:
     enabled: true
     start-prices:   # where each symbol's fair value starts its random walk

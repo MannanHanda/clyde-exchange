@@ -18,13 +18,14 @@ public class OrderController {
     public ExchangeService.OrderResult place(@RequestBody PlaceOrderRequest request) {
         long price = (request.price() == null) ? 0 : request.price();
         long qty = (request.qty() == null) ? 0 : request.qty();
-        return exchange.placeOrder(request.symbol(), request.side(), request.type(), price, qty);
+        return exchange.placeOrder(request.accountId(), request.symbol(), request.side(), request.type(), price, qty);
     }
 
     @DeleteMapping("/{symbol}/{orderId}")
-    public ResponseEntity<Void> cancel(@PathVariable String symbol, @PathVariable long orderId) {
-        return exchange.cancelOrder(symbol, orderId)
+    public ResponseEntity<Void> cancel(@PathVariable String symbol, @PathVariable long orderId,
+                                       @RequestParam String accountId) {
+        return exchange.cancelOrder(accountId, symbol, orderId)
                 ? ResponseEntity.noContent().build()   // 204: cancelled
-                : ResponseEntity.notFound().build();   // 404: unknown or already filled
+                : ResponseEntity.notFound().build();   // 404: unknown, already filled, or not this account's order
     }
 }

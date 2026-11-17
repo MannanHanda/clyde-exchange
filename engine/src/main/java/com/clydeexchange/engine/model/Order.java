@@ -11,9 +11,10 @@ public class Order {
     private final String symbol;
     private final Side side;
     private final OrderType type;
+    private final String accountId;   // who placed it: the account whose cash and shares it trades with
 
 
-    public Order(long id,  String symbol, Side side, long price, long quantity, OrderType type) {
+    public Order(long id,  String symbol, Side side, long price, long quantity, OrderType type, String accountId) {
         this.id = id;
         this.symbol = symbol;
         this.side = side;
@@ -21,6 +22,7 @@ public class Order {
         this.quantity = quantity;
         this.remaining = quantity;
         this.type = type;
+        this.accountId = accountId;
     }
 
 
@@ -44,6 +46,9 @@ public class Order {
     }
     public OrderType getType() {
         return type;
+    }
+    public String getAccountId() {
+        return accountId;
     }
 
     public long fill(long qty) {

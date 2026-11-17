@@ -6,11 +6,11 @@ import static org.junit.jupiter.api.Assertions.*;
 public class OrderBookTest {
 
     private Order buy(long id, long price, long qty) {
-        return new Order(id, "MANN", Side.BUY, price, qty, OrderType.LIMIT);
+        return new Order(id, "MANN", Side.BUY, price, qty, OrderType.LIMIT, "buyer");
     }
 
     private Order sell(long id, long price, long qty) {
-        return new Order(id, "MANN", Side.SELL, price, qty, OrderType.LIMIT);
+        return new Order(id, "MANN", Side.SELL, price, qty, OrderType.LIMIT, "seller");
     }
 
     @Test
