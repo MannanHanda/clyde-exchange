@@ -10,13 +10,15 @@ import java.util.Random;
 
 /**
  * Trades for no particular reason, like retail flow. Each tick it may send a market order
- * (which creates trades against the market maker) or a limit order near fair value (which adds
+ * (which creates trades against the market maker) or a limit order near the last price (which adds
  * depth and sometimes crosses). Its limit orders are cancelled after a while so the book
- * doesn't fill up with stale prices.
+ * doesn't fill up with stale prices. It knows nothing about fair value.
  */
 public class NoiseTraderBot implements Bot {
 
     private static final int ORDER_LIFETIME_TICKS = 20;
+    private static final long MIN_POUNDS = 500;
+    private static final long MAX_POUNDS = 4_000;
 
     private record LiveOrder(long id, long placedAtTick) {}
 
@@ -37,18 +39,19 @@ public class NoiseTraderBot implements Bot {
     }
 
     @Override
-    public void act(long fairValue) {
+    public void act(MarketState market) {
         tick++;
         cancelStaleOrders();
         if (random.nextDouble() >= activity) return;
 
+        long last = market.lastPrice();
         Side side = random.nextBoolean() ? Side.BUY : Side.SELL;
-        long qty = 5 + random.nextInt(36);
+        long qty = Sizing.shares(MIN_POUNDS + random.nextLong(MAX_POUNDS - MIN_POUNDS), last);
         if (random.nextDouble() < 0.6) {
             exchange.placeOrder(accountId, symbol, side, OrderType.MARKET, 0, qty);
         } else {
-            long offset = random.nextInt((int) Math.max(2, fairValue / 500));   // within ~0.2%
-            long price = Math.max(1, (side == Side.BUY) ? fairValue - offset : fairValue + offset);
+            long offset = random.nextInt((int) Math.max(2, last / 500));   // within ~0.2%
+            long price = Math.max(1, (side == Side.BUY) ? last - offset : last + offset);
             long id = exchange.placeOrder(accountId, symbol, side, OrderType.LIMIT, price, qty).orderId();
             liveOrders.addLast(new LiveOrder(id, tick));
         }

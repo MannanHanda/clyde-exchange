@@ -216,8 +216,8 @@ public class MatchingEngineTest {
         List<OpenOrder> open = engine.openOrders("alice");
 
         assertEquals(List.of(
-                new OpenOrder(first, "alice", "MANN", Side.BUY, 99, 10, 10),
-                new OpenOrder(second, "alice", "CLYD", Side.SELL, 50, 30, 20)), open);
+                new OpenOrder(first, "alice", "MANN", Side.BUY, OrderType.LIMIT, 99, 0, 10, 10),
+                new OpenOrder(second, "alice", "CLYD", Side.SELL, OrderType.LIMIT, 50, 0, 30, 20)), open);
         assertTrue(engine.openOrders("nobody").isEmpty());
     }
 

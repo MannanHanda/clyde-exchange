@@ -10,6 +10,20 @@ public class OrderBook {
     private final TreeMap<Long, PriceLevel> bids;
     private final TreeMap<Long, PriceLevel> asks;
     private final Map<Long, Order> ordersById = new HashMap<>();
+    private final Map<Long, StopOrder> stops = new LinkedHashMap<>();   // oldest first
+    private long lastTradePrice;                                        // 0 until the first trade
+
+    /**
+     * A stop order is not on the book and nobody can trade with it. It waits until the last trade
+     * price reaches its stop price, then turns into a normal order: MARKET if limitPrice is 0, else LIMIT.
+     * A sell stop triggers when the price falls to it (a "stop-loss"); a buy stop when the price rises to it.
+     */
+    record StopOrder(long id, String accountId, String symbol, Side side, long stopPrice, long limitPrice, long qty) {
+
+        boolean triggeredBy(long lastPrice) {
+            return (side == Side.BUY) ? lastPrice >= stopPrice : lastPrice <= stopPrice;
+        }
+    }
 
     public OrderBook() {
         this.bids = new TreeMap<>(Comparator.reverseOrder());
@@ -77,6 +91,7 @@ public class OrderBook {
             String buyAccount = (incoming.getSide() == Side.BUY) ? incoming.getAccountId() : resting.getAccountId();
             String sellAccount = (incoming.getSide() == Side.BUY) ? resting.getAccountId() : incoming.getAccountId();
             trades.add(new Trade(buyId, sellId, bestLevel.getPrice(), qty, buyAccount, sellAccount));
+            lastTradePrice = bestLevel.getPrice();
 
             // 4. queue empty? remove it
             if (bestLevel.isEmpty()) opposite.remove(bestLevel.getPrice());
@@ -100,7 +115,40 @@ public class OrderBook {
         return levels;
     }
 
+    void addStop(StopOrder stop) {
+        stops.put(stop.id(), stop);
+    }
+
+    /**
+     * Turns every stop order the last trade price has reached into a real order and matches it.
+     * Those trades move the price too, so they can set off more stops: keep going until none fire.
+     * (This chain reaction is real: it is how a falling price can turn into a sudden drop.)
+     */
+    List<Trade> triggerStops() {
+        List<Trade> trades = new ArrayList<>();
+        StopOrder next;
+        while ((next = nextTriggeredStop()) != null) {
+            stops.remove(next.id());
+            OrderType type = (next.limitPrice() > 0) ? OrderType.LIMIT : OrderType.MARKET;
+            trades.addAll(match(new Order(next.id(), next.symbol(), next.side(), next.limitPrice(), next.qty(), type, next.accountId())));
+        }
+        return trades;
+    }
+
+    private StopOrder nextTriggeredStop() {
+        if (lastTradePrice == 0) return null;
+        for (StopOrder stop : stops.values()) {
+            if (stop.triggeredBy(lastTradePrice)) return stop;
+        }
+        return null;
+    }
+
+    long lastTradePrice() {
+        return lastTradePrice;
+    }
+
     boolean cancel(long orderId) {
+        if (stops.remove(orderId) != null) return true;
         Order order = ordersById.remove(orderId);
         if (order == null) return false; // unknown, already filled, or already cancelled
 
@@ -116,8 +164,29 @@ public class OrderBook {
         return ordersById.get(orderId);
     }
 
-    Collection<Order> restingOrders() {
-        return Collections.unmodifiableCollection(ordersById.values());
+    /** The open order with this id (resting on the book, or a waiting stop), or null. */
+    OpenOrder openOrder(long orderId) {
+        Order order = ordersById.get(orderId);
+        if (order != null) return view(order);
+        StopOrder stop = stops.get(orderId);
+        return (stop == null) ? null : view(stop);
+    }
+
+    /** Everything still open in this book: resting orders and waiting stops, in no particular order. */
+    List<OpenOrder> openOrders() {
+        List<OpenOrder> open = new ArrayList<>();
+        for (Order order : ordersById.values()) open.add(view(order));
+        for (StopOrder stop : stops.values()) open.add(view(stop));
+        return open;
+    }
+
+    private static OpenOrder view(Order o) {
+        return new OpenOrder(o.getId(), o.getAccountId(), o.getSymbol(), o.getSide(), o.getType(), o.getPrice(), 0, o.getQuantity(), o.getRemaining());
+    }
+
+    private static OpenOrder view(StopOrder s) {
+        OrderType type = (s.limitPrice() > 0) ? OrderType.STOP_LIMIT : OrderType.STOP;
+        return new OpenOrder(s.id(), s.accountId(), s.symbol(), s.side(), type, s.limitPrice(), s.stopPrice(), s.qty(), s.qty());
     }
 
     /**

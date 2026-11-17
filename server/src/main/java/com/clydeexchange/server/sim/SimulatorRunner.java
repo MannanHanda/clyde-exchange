@@ -1,5 +1,6 @@
 package com.clydeexchange.server.sim;
 
+import com.clydeexchange.server.news.NewsFeed;
 import com.clydeexchange.server.service.ExchangeService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,14 +8,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Random;
 
 /**
- * Spring's only job here is the clock: every 250 ms, move each symbol's fair value and let its bots act.
- * The bots are plain Java and go through ExchangeService like any other client.
- * Each bot has its own account (shared across symbols), so its position and profit can be seen like anyone else's.
+ * Spring's only job here is the clock: every 250 ms, move the Simulator forward one tick,
+ * and pass its headlines on to the news feed.
  * Turned off with exchange.sim.enabled=false (the API tests do this so the book stays predictable).
  */
 @Component
@@ -23,35 +21,18 @@ public class SimulatorRunner {
 
     private static final Logger log = LoggerFactory.getLogger(SimulatorRunner.class);
 
-    private static final String MAKER = "bot-maker";
-    private static final List<String> NOISE = List.of("bot-noise-1", "bot-noise-2", "bot-noise-3");
+    private final Simulator simulator;
 
-    private record Market(FairValueModel fairValue, List<Bot> bots) {}
-
-    private final List<Market> markets = new ArrayList<>();
-
-    public SimulatorRunner(ExchangeService exchange, SimProperties props) {
-        Random random = new Random();
-        exchange.openBotAccount(MAKER);
-        NOISE.forEach(exchange::openBotAccount);
-        for (String symbol : exchange.symbols()) {
-            long start = props.startPrices().getOrDefault(symbol, 10_000L);
-            List<Bot> bots = List.of(
-                    new MarketMakerBot(MAKER, symbol, exchange, random),
-                    new NoiseTraderBot(NOISE.get(0), symbol, exchange, random, 0.6),
-                    new NoiseTraderBot(NOISE.get(1), symbol, exchange, random, 0.6),
-                    new NoiseTraderBot(NOISE.get(2), symbol, exchange, random, 0.3));
-            markets.add(new Market(new FairValueModel(start, 0.001, random), bots));
-        }
+    public SimulatorRunner(ExchangeService exchange, NewsFeed newsFeed) {
+        this.simulator = new Simulator(exchange, new Random(), headline -> newsFeed.publish(
+                headline.symbol(), headline.sector(), headline.text(),
+                headline.good() ? NewsFeed.Kind.GOOD : NewsFeed.Kind.BAD));
     }
 
     @Scheduled(fixedRate = 250)
     public void tick() {
         try {
-            for (Market market : markets) {
-                long fair = market.fairValue().step();
-                for (Bot bot : market.bots()) bot.act(fair);
-            }
+            simulator.tick();
         } catch (RuntimeException e) {
             log.warn("Simulator tick failed", e);   // keep the market running if one tick goes wrong
         }

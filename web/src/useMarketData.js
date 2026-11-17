@@ -38,13 +38,11 @@ function bookRows({ symbol, bids, asks }) {
 
 /**
  * Loads recent trades over REST, then streams /ws/market into the Perspective tables.
- * Reconnects automatically if the server goes away. Returns the connection status
- * and a per-symbol summary (last price, first price seen, trade count) for the header.
+ * Reconnects automatically if the server goes away. Returns the connection status and the list of symbols.
  */
 export function useMarketData() {
     const [status, setStatus] = useState("connecting");
     const [symbols, setSymbols] = useState([]);
-    const [stats, setStats] = useState({});
 
     useEffect(() => {
         let socket;
@@ -59,15 +57,6 @@ export function useMarketData() {
             fresh.forEach((t) => seen.add(tradeKey(t)));
             if (seen.size > 50_000) seen.clear();
             tradesTable.update(tradeRows(fresh));
-
-            setStats((prev) => {
-                const next = { ...prev };
-                for (const t of [...fresh].sort((a, b) => a.timestamp - b.timestamp)) {
-                    const s = next[t.symbol] ?? { open: toPounds(t.price), count: 0 };
-                    next[t.symbol] = { ...s, last: toPounds(t.price), count: s.count + 1 };
-                }
-                return next;
-            });
         }
 
         async function backfill() {
@@ -109,5 +98,5 @@ export function useMarketData() {
         };
     }, []);
 
-    return { status, symbols, stats };
+    return { status, symbols };
 }

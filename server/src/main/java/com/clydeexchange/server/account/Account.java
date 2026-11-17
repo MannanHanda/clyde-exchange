@@ -50,6 +50,11 @@ public class Account {
         if (fills.size() > FILL_HISTORY) fills.removeLast();
     }
 
+    /** Adds shares without paying for them, valued at costPerShare. Used to give the simulator's bots their starting holdings. */
+    public void depositShares(String symbol, long qty, long costPerShare) {
+        positions.computeIfAbsent(symbol, s -> new Position()).apply(qty, costPerShare);
+    }
+
     public String id() { return id; }
     public boolean unlimited() { return unlimited; }
     public long cash() { return cash; }

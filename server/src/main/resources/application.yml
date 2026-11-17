@@ -11,12 +11,23 @@ server:
 
 exchange:
   # Prices everywhere are in ticks of 1p, so 10050 = £100.50
-  symbols: MANN, CLYD
+  instruments:   # what can be traded. start-price is where each one opens.
+    - { symbol: MANN, name: Mannan Technologies, sector: Technology, start-price: 10000 }
+    - { symbol: CLYD, name: Clyde Digital,       sector: Technology, start-price: 5000 }
+    - { symbol: KELV, name: Kelvin Systems,      sector: Technology, start-price: 18200 }
+    - { symbol: NSEA, name: North Sea Energy,    sector: Energy,     start-price: 3450 }
+    - { symbol: TIDE, name: Tidal Power,         sector: Energy,     start-price: 1280 }
+    - { symbol: GLAS, name: Glasgow Bank,        sector: Finance,    start-price: 6400 }
+    - { symbol: FORT, name: Forth Insurance,     sector: Finance,    start-price: 2750 }
+    - { symbol: LOMD, name: Lomond Foods,        sector: Consumer,   start-price: 840 }
+    - { symbol: ARRN, name: Arran Retail,        sector: Consumer,   start-price: 2100 }
+    - { symbol: CALE, name: Caledonia Pharma,    sector: Health,     start-price: 14500 }
+  circuit-breaker:   # pause trading in a symbol whose price moves this far, this fast
+    threshold-percent: 5
+    window-seconds: 60
+    halt-seconds: 15
   accounts:
     starting-cash:   # traders, and the cash they start with in ticks: 10000000 = £100,000
       mannan: 10000000
   sim:
     enabled: true
-    start-prices:   # where each symbol's fair value starts its random walk
-      MANN: 10000
-      CLYD: 5000

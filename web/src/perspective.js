@@ -26,7 +26,7 @@ export const tradesTable = await worker.table(
         price: "float",       // pounds, for display (the server sends integer ticks)
         qty: "integer",
     },
-    { limit: 20_000 },
+    { limit: 60_000 },
 );
 
 /** One row per (symbol, depth level). Indexed, so each update overwrites rows in place. */

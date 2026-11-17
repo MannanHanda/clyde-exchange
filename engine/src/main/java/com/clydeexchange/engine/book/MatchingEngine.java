@@ -13,7 +13,12 @@ import java.util.*;
  */
 public class MatchingEngine {
 
-    /** restingQty is how much of the order is now waiting on the book (0 if it filled or was cancelled). */
+    /**
+     * restingQty is how much of the order is now waiting: on the book, or as a stop order that has
+     * not triggered yet (0 if it filled or was cancelled).
+     * trades is every trade this order caused, in order. Most involve the order itself, but if its
+     * trades set off other people's stop orders, their trades are in the list too.
+     */
     public record SubmitResult(long orderId, List<Trade> trades, long restingQty) {}
 
     private final Map<String, OrderBook> books = new LinkedHashMap<>(); // keeps symbols in config order
@@ -26,45 +31,74 @@ public class MatchingEngine {
     }
 
     public SubmitResult submit(String accountId, String symbol, Side side, OrderType type, long price, long qty){
-        validate(accountId, symbol, side, type, price, qty);
-        OrderBook book = books.get(symbol);
+        return submit(accountId, symbol, side, type, price, 0, qty);
+    }
 
-        Order order = new Order(nextOrderId++, symbol, side, price, qty, type, accountId);
-        List<Trade> trades = book.match(order);
-        long restingQty = (book.find(order.getId()) == null) ? 0 : order.getRemaining();
-        return new SubmitResult(order.getId(), trades, restingQty);
+    /** stopPrice is only used by STOP and STOP_LIMIT orders; price is the limit price (ignored by MARKET and STOP). */
+    public SubmitResult submit(String accountId, String symbol, Side side, OrderType type, long price, long stopPrice, long qty){
+        validate(accountId, symbol, side, type, price, stopPrice, qty);
+        OrderBook book = books.get(symbol);
+        long id = nextOrderId++;
+
+        if (isStop(type)) {
+            long limitPrice = (type == OrderType.STOP_LIMIT) ? price : 0;
+            book.addStop(new OrderBook.StopOrder(id, accountId, symbol, side, stopPrice, limitPrice, qty));
+            return new SubmitResult(id, List.of(), qty);
+        }
+
+        Order order = new Order(id, symbol, side, price, qty, type, accountId);
+        List<Trade> trades = new ArrayList<>(book.match(order));
+        trades.addAll(book.triggerStops());
+        long restingQty = (book.find(id) == null) ? 0 : order.getRemaining();
+        return new SubmitResult(id, trades, restingQty);
+    }
+
+    public void validate(String accountId, String symbol, Side side, OrderType type, long price, long qty){
+        validate(accountId, symbol, side, type, price, 0, qty);
     }
 
     /** Throws if the order is malformed. Public so the server can run the same checks before its own. */
-    public void validate(String accountId, String symbol, Side side, OrderType type, long price, long qty){
+    public void validate(String accountId, String symbol, Side side, OrderType type, long price, long stopPrice, long qty){
         if (!books.containsKey(symbol)) throw new IllegalArgumentException("Unknown symbol " + symbol);
         if (accountId == null || accountId.isBlank()) throw new IllegalArgumentException("Account is required");
         if (side == null || type == null) throw new IllegalArgumentException("Side and type are required");
         if (qty <= 0) throw new IllegalArgumentException("Quantity must be > 0, was " + qty);
-        if (type == OrderType.LIMIT && price <= 0) throw new IllegalArgumentException("Limit price must be > 0, was " + price);
+        boolean hasLimit = type == OrderType.LIMIT || type == OrderType.STOP_LIMIT;
+        if (hasLimit && price <= 0) throw new IllegalArgumentException("Limit price must be > 0, was " + price);
+        if (!isStop(type)) return;
+
+        if (stopPrice <= 0) throw new IllegalArgumentException("Stop price must be > 0, was " + stopPrice);
+        // A stop on the wrong side of the market would trigger at once, which is never what was meant
+        long last = books.get(symbol).lastTradePrice();
+        if (last == 0) return;
+        if (side == Side.SELL && stopPrice >= last) throw new IllegalArgumentException("A sell stop price must be below the last traded price");
+        if (side == Side.BUY && stopPrice <= last) throw new IllegalArgumentException("A buy stop price must be above the last traded price");
     }
 
-    /** Returns true if the order was resting and is now removed; false if unknown or already filled. */
+    private static boolean isStop(OrderType type){
+        return type == OrderType.STOP || type == OrderType.STOP_LIMIT;
+    }
+
+    /** Returns true if the order was open (resting or a waiting stop) and is now removed; false if unknown or already filled. */
     public boolean cancel(String symbol, long orderId){
         OrderBook book = books.get(symbol);
         if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
         return book.cancel(orderId);
     }
 
-    /** The resting order with this id, or null if it is unknown, filled or cancelled. */
+    /** The open order with this id (resting, or a waiting stop), or null if it is unknown, filled or cancelled. */
     public OpenOrder openOrder(String symbol, long orderId){
         OrderBook book = books.get(symbol);
         if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
-        Order order = book.find(orderId);
-        return (order == null) ? null : view(order);
+        return book.openOrder(orderId);
     }
 
-    /** Every order this account has resting, across all symbols, oldest first. */
+    /** Every order this account has open (resting or a waiting stop), across all symbols, oldest first. */
     public List<OpenOrder> openOrders(String accountId){
         List<OpenOrder> open = new ArrayList<>();
         for (OrderBook book : books.values()) {
-            for (Order order : book.restingOrders()) {
-                if (order.getAccountId().equals(accountId)) open.add(view(order));
+            for (OpenOrder order : book.openOrders()) {
+                if (order.accountId().equals(accountId)) open.add(order);
             }
         }
         open.sort(Comparator.comparingLong(OpenOrder::orderId));
@@ -76,10 +110,6 @@ public class MatchingEngine {
         OrderBook book = books.get(symbol);
         if (book == null) throw new IllegalArgumentException("Unknown symbol " + symbol);
         return book.marketBuyCost(qty);
-    }
-
-    private static OpenOrder view(Order o){
-        return new OpenOrder(o.getId(), o.getAccountId(), o.getSymbol(), o.getSide(), o.getPrice(), o.getQuantity(), o.getRemaining());
     }
 
     public BookSnapshot snapshot(String symbol, int depth){

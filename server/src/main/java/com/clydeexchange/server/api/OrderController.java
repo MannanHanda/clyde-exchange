@@ -17,8 +17,10 @@ public class OrderController {
     @PostMapping
     public ExchangeService.OrderResult place(@RequestBody PlaceOrderRequest request) {
         long price = (request.price() == null) ? 0 : request.price();
+        long stopPrice = (request.stopPrice() == null) ? 0 : request.stopPrice();
         long qty = (request.qty() == null) ? 0 : request.qty();
-        return exchange.placeOrder(request.accountId(), request.symbol(), request.side(), request.type(), price, qty);
+        return exchange.placeOrder(request.accountId(), request.symbol(), request.side(), request.type(),
+                price, stopPrice, qty);
     }
 
     @DeleteMapping("/{symbol}/{orderId}")
