@@ -1,22 +1,24 @@
 import { useEffect, useState } from "react";
 
-// Whose account the dashboard trades with. There is no login yet, so it is fixed here
-// (or set VITE_ACCOUNT when starting Vite). It must exist in the server's application.yml.
-export const ACCOUNT = import.meta.env.VITE_ACCOUNT ?? "mannan";
-
 /**
- * Polls GET /api/accounts/{id} once a second: cash, positions, open orders and recent fills.
- * Returns null until the first answer arrives (or while the server is down).
+ * Polls GET /api/account once a second while someone is logged in: cash, positions, open orders and recent fills.
+ * The server works out whose account from the login cookie. Returns null until the first answer arrives,
+ * while the server is down, and when nobody is logged in.
  */
-export function useAccount() {
+export function useAccount(user, onLoggedOut) {
     const [account, setAccount] = useState(null);
 
     useEffect(() => {
+        setAccount(null);   // never show the last user's numbers to the next one
+        if (!user) return;
+
         let stopped = false;
         async function load() {
             try {
-                const res = await fetch(`/api/accounts/${ACCOUNT}`);
-                if (!stopped) setAccount(res.ok ? await res.json() : null);
+                const res = await fetch("/api/account");
+                if (stopped) return;
+                if (res.status === 401) onLoggedOut();
+                setAccount(res.ok ? await res.json() : null);
             } catch {
                 if (!stopped) setAccount(null);
             }
@@ -27,7 +29,7 @@ export function useAccount() {
             stopped = true;
             clearInterval(timer);
         };
-    }, []);
+    }, [user, onLoggedOut]);
 
     return account;
 }

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ACCOUNT } from "./useAccount.js";
+import ApiKeys from "./ApiKeys.jsx";
+import Leaderboard from "./Leaderboard.jsx";
 
 const money = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 const pounds = (ticks) => money.format(ticks / 100);
@@ -17,7 +18,7 @@ function Stat({ label, value, className = "" }) {
 }
 
 async function cancel(order) {
-    await fetch(`/api/orders/${order.symbol}/${order.orderId}?accountId=${ACCOUNT}`, { method: "DELETE" });
+    await fetch(`/api/orders/${order.symbol}/${order.orderId}`, { method: "DELETE" });
 }
 
 function Positions({ positions, onSelect }) {
@@ -85,16 +86,29 @@ function Fills({ fills }) {
     );
 }
 
-/** Your money, your shares and your waiting orders. `account` comes from useAccount(). */
-export default function Portfolio({ account, onSelect }) {
+/**
+ * Your money, your shares and your waiting orders, plus your API keys and the leaderboard.
+ * `account` comes from useAccount(). With nobody logged in, only the leaderboard is shown.
+ */
+export default function Portfolio({ account, user, onSelect }) {
     const [tab, setTab] = useState("positions");
-    if (!account) return <div className="portfolio empty">No account data for “{ACCOUNT}” yet…</div>;
+    if (!user) {
+        return (
+            <div className="portfolio">
+                <div className="subtabs"><button className="on">Leaderboard</button></div>
+                <div className="tables"><Leaderboard user={null} /></div>
+            </div>
+        );
+    }
+    if (!account) return <div className="portfolio empty">Loading {user}’s account…</div>;
 
     const pnl = account.realisedPnl + account.unrealisedPnl;
     const tabs = [
         { id: "positions", label: `Positions (${account.positions.length})` },
         { id: "orders", label: `Open orders (${account.openOrders.length})` },
         { id: "fills", label: "Recent fills" },
+        { id: "keys", label: "API keys" },
+        { id: "leaderboard", label: "Leaderboard" },
     ];
     return (
         <div className="portfolio">
@@ -114,6 +128,8 @@ export default function Portfolio({ account, onSelect }) {
                 {tab === "positions" && <Positions positions={account.positions} onSelect={onSelect} />}
                 {tab === "orders" && <OpenOrders orders={account.openOrders} />}
                 {tab === "fills" && <Fills fills={account.fills} />}
+                {tab === "keys" && <ApiKeys />}
+                {tab === "leaderboard" && <Leaderboard user={user} />}
             </div>
         </div>
     );

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { ACCOUNT } from "./useAccount.js";
 
 const TYPES = [
     { id: "MARKET", label: "Market", hint: "Trade now, at the best price available." },
@@ -9,8 +8,11 @@ const TYPES = [
 ];
 const toTicks = (pounds) => Math.round(Number(pounds) * 100);
 
-/** Sends a real order to the exchange over REST, so you can trade against the bots. */
-export default function OrderTicket({ symbol, halted }) {
+/**
+ * Sends a real order to the exchange over REST, so you can trade against the bots.
+ * The order does not say whose it is: the server knows that from the login cookie.
+ */
+export default function OrderTicket({ symbol, halted, onLoggedOut }) {
     const [side, setSide] = useState("BUY");
     const [type, setType] = useState("MARKET");
     const [price, setPrice] = useState("");
@@ -23,7 +25,7 @@ export default function OrderTicket({ symbol, halted }) {
 
     async function submit(e) {
         e.preventDefault();
-        const body = { accountId: ACCOUNT, symbol, side, type, qty: Number(qty) };
+        const body = { symbol, side, type, qty: Number(qty) };
         if (needsPrice) body.price = toTicks(price);
         if (needsStop) body.stopPrice = toTicks(stopPrice);
 
@@ -33,6 +35,10 @@ export default function OrderTicket({ symbol, halted }) {
             body: JSON.stringify(body),
         });
         const json = await res.json();
+        if (res.status === 401) {
+            onLoggedOut();   // the session ran out: App shows the login form again
+            return;
+        }
         if (!res.ok) {
             setResult({ ok: false, text: json.detail ?? "Order rejected" });
             return;

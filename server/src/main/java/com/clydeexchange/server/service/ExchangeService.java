@@ -48,6 +48,9 @@ public class ExchangeService implements OrderGateway, AutoCloseable {
     /** Trading in a symbol has just been paused by its circuit breaker, after the price moved movePercent. */
     public record Halt(String symbol, double movePercent, long until) {}
 
+    /** One row of the leaderboard, before the starting cash is known. */
+    public record Standing(String accountId, long equity) {}
+
     private static final Logger log = LoggerFactory.getLogger(ExchangeService.class);
 
     private static final int TRADE_HISTORY = 500;
@@ -280,6 +283,23 @@ public class ExchangeService implements OrderGateway, AutoCloseable {
     /** Cash, positions, open orders and recent fills for one account; empty if there is no such account. */
     public Optional<AccountView> account(String accountId) {
         return onWriter(() -> Optional.ofNullable(accounts.get(accountId)).map(this::view));
+    }
+
+    /** True if this id belongs to a human trader: the account exists and is not one of the simulator's bots. */
+    public boolean isTrader(String accountId) {
+        return onWriter(() -> {
+            Account account = accounts.get(accountId);
+            return account != null && !account.bot();
+        });
+    }
+
+    /** What every trader's account is worth right now (cash plus shares at the last price), richest first. Bots are left out. */
+    public List<Standing> standings() {
+        return onWriter(() -> accounts.values().stream()
+                .filter(account -> !account.bot())
+                .map(account -> new Standing(account.id(), view(account).equity()))
+                .sorted(Comparator.comparingLong(Standing::equity).reversed())
+                .toList());
     }
 
     /** One summary row per symbol, in config order: last price, today's range and volume, yesterday's close, and whether it is halted. */

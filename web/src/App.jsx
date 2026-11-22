@@ -3,10 +3,12 @@ import { bookTable, candlesTable, tradesTable } from "./perspective.js";
 import { BOOK_DEPTH, useMarketData } from "./useMarketData.js";
 import Viewer from "./Viewer.jsx";
 import OrderTicket from "./OrderTicket.jsx";
+import Login from "./Login.jsx";
 import Portfolio from "./Portfolio.jsx";
 import Watchlist from "./Watchlist.jsx";
 import News from "./News.jsx";
 import { useAccount } from "./useAccount.js";
+import { useAuth } from "./useAuth.js";
 import { changePercent, useMarket } from "./useMarket.js";
 import { INTERVALS, useCandles } from "./useCandles.js";
 
@@ -96,7 +98,8 @@ function Quote({ row }) {
 export default function App() {
     const { status, symbols } = useMarketData();
     const { market, news } = useMarket();
-    const account = useAccount();
+    const auth = useAuth();
+    const account = useAccount(auth.user, auth.loggedOut);
     const [picked, setPicked] = useState(null);
     const [interval, setChartInterval] = useState("1m");   // "live" = the per-second line of trades
     const symbol = picked ?? symbols[0] ?? "MANN";
@@ -119,6 +122,12 @@ export default function App() {
                 <div className={`status ${status}`}>
                     <span className="dot" /> {status}
                 </div>
+                {auth.user && (
+                    <div className="who">
+                        {auth.user}
+                        <button onClick={auth.logout}>Log out</button>
+                    </div>
+                )}
             </header>
             <main>
                 <section className="side">
@@ -134,7 +143,9 @@ export default function App() {
                         <Viewer table={bookTable} config={book} />
                     </div>
                     <div className="panel">
-                        <OrderTicket symbol={symbol} halted={row?.halted ?? false} />
+                        {/* undefined = still asking the server who we are, so show neither form yet */}
+                        {auth.user && <OrderTicket symbol={symbol} halted={row?.halted ?? false} onLoggedOut={auth.loggedOut} />}
+                        {auth.user === null && <Login auth={auth} />}
                     </div>
                 </section>
                 <section className="centre">
@@ -151,7 +162,7 @@ export default function App() {
                         <Viewer key={live ? "trades" : "candles"} table={live ? tradesTable : candlesTable} config={chart} />
                     </div>
                     <div className="panel">
-                        <Portfolio account={account} onSelect={setPicked} />
+                        <Portfolio account={account} user={auth.user} onSelect={setPicked} />
                     </div>
                 </section>
                 <section className="panel tape">

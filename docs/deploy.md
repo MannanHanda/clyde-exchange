@@ -24,6 +24,7 @@ docker compose down -v            # stop everything AND delete the database: the
 | Kept | Not kept |
 |---|---|
 | Every account's cash, positions and realised profit | The bots' open orders (they place new ones within a second) |
+| Users, login sessions and API keys (saved the moment they are made) | How many wrong passwords each username has had, and the order rate limit counts |
 | Traders' open orders, with the same ids | Individual trades between bots (the candles summarise them) |
 | Traders' fills | |
 | Each symbol's last price, today's open/high/low/volume, yesterday's close | |
@@ -45,7 +46,17 @@ docker compose up --build -d
 
 `restart: unless-stopped` in `docker-compose.yml` brings both containers back after a crash or a reboot.
 
-**Before you put it on the public internet:** there is no login yet. The API trusts whatever `accountId` it is given, so anyone who can reach port 8080 can trade as you. Until login exists, keep the port closed to the outside world (reach it through an SSH tunnel: `ssh -L 8080:localhost:8080 you@your-server`) or put it behind a reverse proxy that asks for a password. It also speaks plain HTTP: a reverse proxy such as Caddy adds HTTPS.
+**Before you put it on the public internet:** the exchange has logins, but it speaks plain HTTP, so passwords and the login cookie would cross the internet unencrypted. Put a reverse proxy that adds HTTPS in front of it. With [Caddy](https://caddyserver.com/) that is one line in a `Caddyfile`, and Caddy gets the certificate by itself:
+
+```
+exchange.example.com {
+    reverse_proxy localhost:8080
+}
+```
+
+The server believes the proxy's `X-Forwarded-Proto` header (`server.forward-headers-strategy: native`), so it knows the browser is on HTTPS and marks the login cookie `Secure`. Then close port 8080 to the outside world so that everyone goes through the proxy.
+
+Anyone who can reach the site can register. To stop that, set `EXCHANGE_AUTH_SIGNUPENABLED=false` once your own account exists; existing users can still log in.
 
 ## Settings
 
@@ -54,6 +65,10 @@ docker compose up --build -d
 | `SPRING_DATASOURCE_URL` | Where to save. `jdbc:postgresql://host:5432/name` for PostgreSQL. | `jdbc:h2:file:./data/clyde` (a local file) |
 | `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` | Database login | none |
 | `SERVER_PORT` | Port the server listens on | `8080` |
+| `EXCHANGE_AUTH_SIGNUPENABLED` | `false` stops new people registering | `true` |
+| `EXCHANGE_AUTH_SIGNUPCASH` | What a new trader starts with, in pence | `10000000` (£100,000) |
+| `EXCHANGE_AUTH_MAXUSERS` | Registration closes by itself at this many users | `1000` |
+| `EXCHANGE_API_ORDERSPERSECOND` | Most orders and cancels one account may send in a second | `20` |
 | `JAVA_TOOL_OPTIONS` | Java memory settings | `-XX:MaxRAMPercentage=75` |
 
 The tables are created, and upgraded in later versions, by [Flyway](https://flywaydb.org/) from the scripts in `server/src/main/resources/db/migration` each time the server starts.

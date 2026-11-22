@@ -13,6 +13,9 @@ spring:
 
 server:
   port: 8080
+  # Behind a reverse proxy that adds HTTPS (such as Caddy), believe its X-Forwarded-Proto header, so the server
+  # knows the browser is on https and marks the login cookie Secure. Only proxies on a private network are believed.
+  forward-headers-strategy: native
 
 exchange:
   # Prices everywhere are in ticks of 1p, so 10050 = £100.50
@@ -31,8 +34,11 @@ exchange:
     threshold-percent: 5
     window-seconds: 60
     halt-seconds: 15
-  accounts:
-    starting-cash:   # traders, and the cash they start with in ticks: 10000000 = £100,000
-      mannan: 10000000
+  auth:
+    signup-cash: 10000000    # what everyone who registers starts with, in ticks: 10000000 = £100,000
+    signup-enabled: true     # false: nobody new can register, existing users can still log in
+    max-users: 1000          # registration closes by itself at this many users
+  api:
+    orders-per-second: 20    # the most orders and cancels one account may send in a second
   sim:
     enabled: true

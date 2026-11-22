@@ -81,7 +81,7 @@ flowchart LR
 
 ## Accounts and paper trading
 
-Every order carries an `accountId`, and every trade moves cash from the buyer to the seller and shares the other way.
+Every order belongs to an account, and every trade moves cash from the buyer to the seller and shares the other way.
 
 - **Pre-trade risk check.** Before an order reaches the engine, the server checks the account can cover it in the worst case. There is no borrowing: you can't buy with money you don't have or sell shares you don't hold. A market buy is checked against what it would really cost by walking the ask side of the book.
 - **Reserved funds.** Cash promised to resting buy orders, and shares promised to resting sell orders, can't be used twice. `buyingPower = cash - reservedCash`. Reservations are not stored: they are worked out from the engine's open orders each time, so they can't drift out of step with the book.
@@ -89,10 +89,23 @@ Every order carries an `accountId`, and every trade moves cash from the buyer to
 - **Profit and loss.** Positions use the average-cost method. Selling realises profit against the average price paid; what you still hold is valued at the last trade price (unrealised).
 - **Stops are reserved too.** A waiting sell stop holds its shares and a waiting buy stop-limit holds its cash, so the order can always be honoured when it triggers. A trader can't place a buy stop *without* a limit, because nobody can say in advance what it would cost.
 - **Bots have accounts too.** The market maker and noise traders (`bot-maker`, `bot-noise-1`…) skip the risk check, so they can go short. The value, momentum and investor bots get a fixed pot of cash and shares and pass the same risk check as you, so they can run out of money.
-- **Trader accounts** are listed in `application.yml` under `exchange.accounts.starting-cash`. The starting cash is only given when the account is first created; after that the saved balance is used. There is no login yet; the dashboard trades as `mannan`.
+- **Trader accounts** are made by registering (see below), and start with £100,000 (`exchange.auth.signup-cash`). Accounts can also be listed in `application.yml` under `exchange.accounts.starting-cash`; whoever registers that name first takes the account over as it is.
 - **At most 200 open orders** per trader, so nobody can fill the server's memory with orders.
 
 ---
+
+## Logins, API keys and the leaderboard
+
+You can watch the market without logging in. To trade, you create an account with a username and password. Your account is the one with the same id as your username, and nothing in a request can name a different one: the server works out whose order it is from how the request proved who it was.
+
+- **Two ways to prove who you are.** People log in with a password and get a **session**: a random 192-bit token in a cookie. Programs use an **API key** sent in an `X-API-Key` header. Keys are made and deleted on the dashboard, and only a logged-in person can do that, so a leaked key can be cut off but can't make more keys.
+- **Nothing secret is stored as it is.** Passwords are hashed with **BCrypt**, which is slow on purpose so a stolen database can't be guessed through quickly. Session tokens and API keys are long and random, so a fast **SHA-256** hash is enough, and the database only holds that. Someone with a copy of the database still can't log in as anyone. A new API key is shown once, when it is made.
+- **The cookie** is `HttpOnly` (the page's own JavaScript can't read it, so an injected script can't steal it), `SameSite=Strict` (the browser won't send it on requests started by another website, which stops cross-site request forgery) and `Secure` when the site is on HTTPS. It lasts 30 days, and logging out deletes the session on the server too, so a copied cookie stops working.
+- **Guessing is slowed down.** After 10 wrong passwords for one username, that username is locked for 15 minutes. A wrong password and an unknown username give the same answer and take the same time, so the login form doesn't reveal who has an account.
+- **One account can't swamp the exchange.** Each account may send at most 20 orders and cancels a second (`exchange.api.orders-per-second`); past that it gets `429 Too Many Requests`. Registration can be closed, and closes itself at 1,000 users (`exchange.auth`).
+- **Leaderboard.** Every registered trader, ranked by return: account value now against what they started with. Ranking by percentage, not pounds, keeps it fair between accounts of different sizes. Bots aren't on it. It is worked out at most every 2 seconds however many people are looking, because valuing every account uses the exchange's one writer thread.
+- **Your own bots.** [`examples/bot.py`](examples/bot.py) is a small Python trading bot (no libraries needed) to copy and change. Create a key in the dashboard's **API keys** tab, then `CLYDE_API_KEY=clyde_... python examples/bot.py`.
+- Users, sessions and keys are written to the database straight away (not once a second like the market), because logging in is rare and must not be lost.
 
 ## Circuit breaker
 
@@ -147,11 +160,21 @@ docker compose up --build -d      # then open http://localhost:8080
 
 All prices are in **ticks of 1p** (`10100` = £101.00). Symbols are configured in `server/src/main/resources/application.yml`.
 
+🔒 = needs you to be logged in (the `clyde_session` cookie) or an API key (`X-API-Key` header); without one the answer is `401`. 🍪 = needs the cookie: an API key is not enough.
+
 | Method | Path | What it does |
 |---|---|---|
-| `POST` | `/api/orders` | Place an order. Body: `{"accountId","symbol","side","type","price","qty"}`; `type` is `MARKET`, `LIMIT`, `STOP` or `STOP_LIMIT`. `price` is needed for `LIMIT` and `STOP_LIMIT`, and `stopPrice` for the two stop types. Returns the order id, any trades, and `restingQty` (how much is now waiting on the book). |
-| `DELETE` | `/api/orders/{symbol}/{id}?accountId=…` | Cancel one of your resting orders: `204`, or `404` if unknown, already filled, or not yours |
-| `GET` | `/api/accounts/{id}` | Cash, buying power, positions, profit/loss, open orders and recent fills |
+| `POST` | `/api/auth/register` | Body `{"username","password"}`. Username: 3 to 20 lower-case letters, digits or `_`. Password: 8 to 72 characters. Creates your account and logs you in (sets the cookie). |
+| `POST` | `/api/auth/login` | Body `{"username","password"}`. Sets the cookie, or `401`. `429` after 10 wrong passwords. |
+| `POST` | `/api/auth/logout` | Ends the session on the server and deletes the cookie |
+| `GET` | `/api/auth/me` | `{"username": "you" or null, "signupOpen": true}` |
+| `POST` 🔒 | `/api/orders` | Place an order. Body: `{"symbol","side","type","price","stopPrice","qty"}`; `type` is `MARKET`, `LIMIT`, `STOP` or `STOP_LIMIT`. `price` is needed for `LIMIT` and `STOP_LIMIT`, and `stopPrice` for the two stop types. Returns the order id, any trades, and `restingQty` (how much is now waiting on the book). |
+| `DELETE` 🔒 | `/api/orders/{symbol}/{id}` | Cancel one of your resting orders: `204`, or `404` if unknown, already filled, or not yours |
+| `GET` 🔒 | `/api/account` | Your cash, buying power, positions, profit/loss, open orders and recent fills |
+| `GET` 🍪 | `/api/keys` | Your API keys: id, name, the first 12 characters, and when it was made |
+| `POST` 🍪 | `/api/keys` | Body `{"label"}`. Makes a key and returns it, the only time it is ever shown. At most 5. |
+| `DELETE` 🍪 | `/api/keys/{id}` | Deletes a key; programs using it get `401` from then on |
+| `GET` | `/api/leaderboard?limit=20` | Registered traders ranked by return: `rank`, `username`, `equity`, `startingCash`, `returnPercent` |
 | `GET` | `/api/book/{symbol}?depth=10` | Top price levels on each side, best first |
 | `GET` | `/api/trades/{symbol}?limit=50` | Recent trades, newest first |
 | `GET` | `/api/market` | One row per symbol: name, sector, last, today's open, high, low and volume, the previous close, and whether it is halted |
@@ -163,16 +186,19 @@ All prices are in **ticks of 1p** (`10100` = £101.00). Symbols are configured i
 Invalid or unaffordable orders get `400 Bad Request` with a message, e.g. `{"detail":"Quantity must be > 0, was 0"}` or `{"detail":"Insufficient shares: trying to sell 80 MANN but only 60 available"}`.
 
 ```bash
+# make an API key in the dashboard's "API keys" tab, then:
+KEY=clyde_...
+
 # buy 100 MANN from the bots at the best available prices, then offer 40 of them for sale at £105.00
-curl -X POST localhost:8080/api/orders -H 'Content-Type: application/json' \
-     -d '{"accountId":"mannan","symbol":"MANN","side":"BUY","type":"MARKET","qty":100}'
-curl -X POST localhost:8080/api/orders -H 'Content-Type: application/json' \
-     -d '{"accountId":"mannan","symbol":"MANN","side":"SELL","type":"LIMIT","price":10500,"qty":40}'
-curl localhost:8080/api/accounts/mannan   # cash down, 100 MANN held, 60 available, one open order
+curl -X POST localhost:8080/api/orders -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+     -d '{"symbol":"MANN","side":"BUY","type":"MARKET","qty":100}'
+curl -X POST localhost:8080/api/orders -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+     -d '{"symbol":"MANN","side":"SELL","type":"LIMIT","price":10500,"qty":40}'
+curl localhost:8080/api/account -H "X-API-Key: $KEY"   # cash down, 100 MANN held, 60 available, one open order
 
 # a stop-loss: sell the other 60 at market if MANN ever trades at £95.00 or below
-curl -X POST localhost:8080/api/orders -H 'Content-Type: application/json' \
-     -d '{"accountId":"mannan","symbol":"MANN","side":"SELL","type":"STOP","stopPrice":9500,"qty":60}'
+curl -X POST localhost:8080/api/orders -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+     -d '{"symbol":"MANN","side":"SELL","type":"STOP","stopPrice":9500,"qty":60}'
 ```
 
 ## Live market data and bots
@@ -216,8 +242,9 @@ Connect to `ws://localhost:8080/ws/market` to receive, at most every 200 ms:
 - **Order book:** best 10 levels each side, with in-cell bars showing size at each price.
 - **Price chart:** a candlestick chart of the price history, with buttons for 1m, 5m, 15m, 1h, 4h and 1d candles. Because candles are saved, the history is still there after a restart. The `Live` button shows the last trade price per second instead, using Perspective's `bucket()` expression and a `last` aggregate.
 - **Trade tape:** newest first, with the aggressor side. The server doesn't send a side, but order ids only go up, so the newer of the buy and sell ids is the order that arrived and crossed the spread.
+- **Log in / create account:** takes the order ticket's place until you log in. Everything else works logged out.
 - **Order ticket:** sends real `MARKET`, `LIMIT`, `STOP` or `STOP_LIMIT` orders to `POST /api/orders` and reports what filled, what is waiting and what was cancelled. It is disabled while the symbol is halted.
-- **Portfolio:** account value, cash, buying power and profit/loss, plus tabs for your positions, open orders (with a cancel button, and including waiting stops) and recent fills. It polls `GET /api/accounts/{id}` once a second.
+- **Portfolio:** account value, cash, buying power and profit/loss, plus tabs for your positions, open orders (with a cancel button, and including waiting stops), recent fills, your API keys, and the leaderboard. It polls `GET /api/account` once a second. Logged out, it shows just the leaderboard.
 - On page load it backfills the last 500 trades per symbol over REST, de-duplicating against the live stream.
 
 ![Dashboard screenshot](docs/dashboard.png)
@@ -233,7 +260,10 @@ server/   Spring Boot application
             Candle, CandleSeries, ExchangeStore (what the service needs from a database)
   store/    JdbcExchangeStore, JdbcNewsStore (the SQL), StateSaver (saves once a second)
   account/  Account, Position (average cost, profit/loss), AccountView
-  api/      OrderController, MarketDataController, AccountController, error handling
+  auth/     AuthService (register, log in, sessions, API keys), UserStore (the SQL), RequestAuth (who is this request from?),
+            Leaderboard
+  api/      OrderController, MarketDataController, AccountController, AuthController, ApiKeyController,
+            RateLimiter, error handling (400, 401, 429)
   news/     NewsFeed (latest headlines), NewsStore
   ws/       MarketDataPublisher (batched WebSocket feed)
   sim/      PriceModel, Simulator, SimulatorRunner, and the bots: MarketMakerBot, NoiseTraderBot,
@@ -242,13 +272,18 @@ web/      React + Vite + Perspective dashboard
   src/perspective.js    starts Perspective (WebAssembly) and creates the tables
   src/useMarketData.js  WebSocket + REST backfill -> tables
   src/useMarket.js      polls the market summary and the news
-  src/useAccount.js     polls the account
+  src/useAuth.js        who is logged in; log in, register, log out
+  src/useAccount.js     polls your account while you are logged in
   src/useCandles.js     polls the candles for the chart
   src/Watchlist.jsx     symbols by sector
   src/News.jsx          headlines
   src/OrderTicket.jsx   market, limit and stop orders
-  src/Portfolio.jsx     cash, positions, open orders, fills
+  src/Login.jsx         log in / create account form
+  src/Portfolio.jsx     cash, positions, open orders, fills, plus the two below
+  src/ApiKeys.jsx       create and delete API keys
+  src/Leaderboard.jsx   traders ranked by return
   src/App.jsx           layout and the viewer configs
+examples/bot.py   a trading bot of your own, using an API key
 Dockerfile, docker-compose.yml   the exchange and PostgreSQL as containers (see docs/deploy.md)
 ```
 
@@ -276,10 +311,14 @@ Dockerfile, docker-compose.yml   the exchange and PostgreSQL as containers (see 
 | Candles (1m to 1d), UTC trading days with previous close, candlestick chart | ✅ done, tested, verified in browser |
 | Memory and database caps for running for months | ✅ done, tested |
 | Dockerfile and docker-compose (exchange + PostgreSQL) | ⚠️ written, not yet run |
+| Login (BCrypt passwords, hashed sessions in an HttpOnly cookie), API keys, rate limits | ✅ done, tested on H2 and PostgreSQL, verified in browser |
+| Leaderboard, and an example Python bot that trades with an API key | ✅ done, tested, bot run against a live server |
 
 ## Known limitations
 
-- No login: the API trusts the `accountId` it is given.
+- There is no "forgot my password": with no email address stored, a lost password means a new account.
+- Login protection is per server: the failed-login count and order rate limit live in memory, so they reset on restart and would not be shared between several servers.
+- Prices are all simulated; there is no real market data.
 - A crash (not a normal shutdown) can lose up to the last second of activity.
 - Only the newest state is saved, not the full order log, so the exact book can't be replayed (see Kafka in the roadmap).
 - No short selling or margin for traders (the market maker and noise traders can go short).

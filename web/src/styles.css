@@ -56,6 +56,19 @@ header {
 .status.live .dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
 .status.reconnecting .dot { background: var(--red); }
 
+.who { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.who button {
+    padding: 2px 8px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 400;
+}
+.who button:hover { color: var(--text); border-color: var(--muted); }
+
 main {
     flex: 1;
     min-height: 0;
@@ -187,6 +200,7 @@ perspective-viewer { width: 100%; height: 100%; }
 .send { color: #fff; border: none; }
 .send.buy { background: var(--green); }
 .send.sell { background: var(--red); }
+.send.go { background: var(--accent); }
 
 .result { font-size: 12px; padding: 6px 8px; border-radius: 6px; }
 .result.ok { background: rgba(38, 166, 154, 0.15); color: var(--green); }
@@ -229,6 +243,24 @@ perspective-viewer { width: 100%; height: 100%; }
     font: inherit;
 }
 .cancel:hover { color: var(--red); border-color: var(--red); }
+.tables tr.me td { color: var(--accent); font-weight: 600; }
+
+.keys { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.keys table { align-self: stretch; }
+.keys code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.newkey code { display: block; margin-top: 4px; color: var(--text); user-select: all; overflow-wrap: anywhere; }
+.newkey-form { display: flex; gap: 6px; }
+.newkey-form input {
+    width: 220px;
+    padding: 3px 8px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 12px;
+}
+.newkey-form .cancel:hover { color: var(--text); border-color: var(--accent); }
 
 /* Phone / narrow screens: stack everything */
 @media (max-width: 900px) {

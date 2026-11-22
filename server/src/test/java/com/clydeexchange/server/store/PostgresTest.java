@@ -3,6 +3,7 @@ package com.clydeexchange.server.store;
 import com.clydeexchange.engine.model.OrderType;
 import com.clydeexchange.engine.model.Side;
 import com.clydeexchange.server.account.AccountView;
+import com.clydeexchange.server.auth.UserStore;
 import com.clydeexchange.server.news.NewsFeed;
 import com.clydeexchange.server.service.Candle;
 import com.clydeexchange.server.service.CircuitBreaker;
@@ -11,8 +12,11 @@ import com.clydeexchange.server.service.Instrument;
 import com.clydeexchange.server.service.MarketSummary;
 import io.zonky.test.db.postgres.embedded.EmbeddedPostgres;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DuplicateKeyException;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -68,6 +72,35 @@ class PostgresTest {
             assertEquals(1, database.store.deleteMinuteCandlesBefore(now.get() + 60_000));
             assertEquals(1, database.newsStore.deleteBefore(2));
             after.close();
+        }
+    }
+
+    @Test
+    void usersSessionsAndApiKeysWorkOnPostgres() throws Exception {
+        try (EmbeddedPostgres postgres = EmbeddedPostgres.start()) {
+            UserStore users = new UserStore(new TestDatabase(postgres.getPostgresDatabase()).jdbc);
+
+            users.addUser(new UserStore.User("alice", "hash", 10_000_000), 1);
+            assertThrows(DuplicateKeyException.class, () -> users.addUser(new UserStore.User("alice", "other", 5), 2));
+            assertEquals("hash", users.user("alice").orElseThrow().passwordHash());
+            assertEquals(Map.of("alice", 10_000_000L), users.startingCashByUser());
+            assertEquals(1, users.userCount());
+
+            users.addSession("token-hash", "alice", 1_000);
+            assertEquals(Optional.of("alice"), users.sessionUser("token-hash", 999));
+            assertEquals(Optional.empty(), users.sessionUser("token-hash", 1_000));
+            assertEquals(1, users.deleteSessionsExpiredBefore(1_000));
+
+            users.addApiKey("alice", "first", "key-hash-1", "clyde_abc", 3);
+            users.addApiKey("alice", "second", "key-hash-2", "clyde_def", 4);
+            assertThrows(DuplicateKeyException.class, () -> users.addApiKey("alice", "copy", "key-hash-1", "clyde_abc", 5));
+            assertEquals(Optional.of("alice"), users.apiKeyUser("key-hash-2"));
+            List<UserStore.ApiKeyInfo> keys = users.apiKeys("alice");
+            assertEquals(List.of("first", "second"), keys.stream().map(UserStore.ApiKeyInfo::label).toList());
+            assertNotEquals(keys.get(0).id(), keys.get(1).id());   // the database numbers them
+            assertFalse(users.deleteApiKey("bob", keys.get(0).id()));
+            assertTrue(users.deleteApiKey("alice", keys.get(0).id()));
+            assertEquals(Optional.empty(), users.apiKeyUser("key-hash-1"));
         }
     }
 }
