@@ -310,7 +310,7 @@ Dockerfile, docker-compose.yml   the exchange and PostgreSQL as containers (see 
 | Persistence: accounts, open orders, fills, prices and news survive a restart (H2 or PostgreSQL) | ✅ done, tested on both |
 | Candles (1m to 1d), UTC trading days with previous close, candlestick chart | ✅ done, tested, verified in browser |
 | Memory and database caps for running for months | ✅ done, tested |
-| Dockerfile and docker-compose (exchange + PostgreSQL) | ⚠️ written, not yet run |
+| Dockerfile and docker-compose (exchange + PostgreSQL) | ✅ done, built and run, upgrade from the previous version tested |
 | Login (BCrypt passwords, hashed sessions in an HttpOnly cookie), API keys, rate limits | ✅ done, tested on H2 and PostgreSQL, verified in browser |
 | Leaderboard, and an example Python bot that trades with an API key | ✅ done, tested, bot run against a live server |
 
