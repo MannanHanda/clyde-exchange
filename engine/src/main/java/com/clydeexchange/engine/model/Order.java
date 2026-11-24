@@ -1,7 +1,5 @@
 package com.clydeexchange.engine.model;
 
-
-
 public class Order {
 
     private final long id;
@@ -13,8 +11,7 @@ public class Order {
     private final OrderType type;
     private final String accountId;   // who placed it: the account whose cash and shares it trades with
 
-
-    public Order(long id,  String symbol, Side side, long price, long quantity, OrderType type, String accountId) {
+    public Order(long id, String symbol, Side side, long price, long quantity, OrderType type, String accountId) {
         this.id = id;
         this.symbol = symbol;
         this.side = side;
@@ -24,7 +21,6 @@ public class Order {
         this.type = type;
         this.accountId = accountId;
     }
-
 
     public long getId() {
         return id;
@@ -52,20 +48,13 @@ public class Order {
     }
 
     public long fill(long qty) {
-        if (qty > remaining) {
-            throw new IllegalArgumentException("Fill " + qty + " exceeds remaining " + remaining);
-        }
-        else if (qty <= 0){
-            throw new IllegalArgumentException("Quantity can't be <= 0");
-        }
-        else {
-            remaining -= qty;
-            return remaining;
-        }
+        if (qty <= 0) throw new IllegalArgumentException("Quantity can't be <= 0");
+        if (qty > remaining) throw new IllegalArgumentException("Fill " + qty + " exceeds remaining " + remaining);
+        remaining -= qty;
+        return remaining;
     }
 
-    public boolean isFilled(){
+    public boolean isFilled() {
         return remaining == 0;
     }
-
 }

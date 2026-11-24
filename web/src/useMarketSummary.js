@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
  * Both are small, so polling is simpler than pushing them over the WebSocket.
  * Returns empty lists until the first answer arrives.
  */
-export function useMarket() {
+export function useMarketSummary() {
     const [market, setMarket] = useState([]);
     const [news, setNews] = useState([]);
 

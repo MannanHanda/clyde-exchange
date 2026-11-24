@@ -1,4 +1,5 @@
 package com.clydeexchange.engine.book;
+
 import com.clydeexchange.engine.model.Order;
 import com.clydeexchange.engine.model.OrderType;
 import com.clydeexchange.engine.model.Side;
@@ -32,13 +33,7 @@ public class OrderBook {
 
     void rest(Order order) {
         TreeMap<Long, PriceLevel> side = (order.getSide() == Side.BUY) ? bids : asks;
-        PriceLevel level = side.get(order.getPrice());
-        if (level == null) {
-            PriceLevel newlevel = new PriceLevel(order.getPrice());
-            side.put(order.getPrice(), newlevel);
-            level = newlevel;
-        }
-        level.add(order);
+        side.computeIfAbsent(order.getPrice(), PriceLevel::new).add(order);
         ordersById.put(order.getId(), order);
     }
 
@@ -60,19 +55,15 @@ public class OrderBook {
         while (!incoming.isFilled()) {
             // 1. anyone there at all?
             Map.Entry<Long, PriceLevel> best = opposite.firstEntry();
-            boolean isAnyoneThere = best != null;
-            if (!isAnyoneThere) break;
+            if (best == null) break;
             PriceLevel bestLevel = best.getValue();
 
-            // 2. do the prices cross?
-            boolean doesItCross;
-            if (incoming.getType() == OrderType.MARKET){
-                doesItCross =true;
-            }
-            else{
-                doesItCross = (incoming.getSide() == Side.BUY) ? (incoming.getPrice() >= bestLevel.getPrice()) : (incoming.getPrice() <= bestLevel.getPrice());
-            }
-            if (!doesItCross) break;
+            // 2. do the prices cross? (a market order takes any price)
+            boolean crosses = incoming.getType() == OrderType.MARKET
+                    || (incoming.getSide() == Side.BUY
+                        ? incoming.getPrice() >= bestLevel.getPrice()
+                        : incoming.getPrice() <= bestLevel.getPrice());
+            if (!crosses) break;
 
             // 3. trade with the front ticket, at the resting price
             Order resting = bestLevel.peek();

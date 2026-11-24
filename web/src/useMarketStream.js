@@ -40,7 +40,7 @@ function bookRows({ symbol, bids, asks }) {
  * Loads recent trades over REST, then streams /ws/market into the Perspective tables.
  * Reconnects automatically if the server goes away. Returns the connection status and the list of symbols.
  */
-export function useMarketData() {
+export function useMarketStream() {
     const [status, setStatus] = useState("connecting");
     const [symbols, setSymbols] = useState([]);
 

@@ -1,4 +1,4 @@
-import { changePercent } from "./useMarket.js";
+import { changePercent } from "./useMarketSummary.js";
 
 /** Every symbol, grouped by sector, with its last price and change. Click one to trade it. */
 export default function Watchlist({ market, selected, onSelect }) {

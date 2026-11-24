@@ -236,7 +236,7 @@ Connect to `ws://localhost:8080/ws/market` to receive, at most every 200 ms:
 
 `web/` is a small React app built with Vite. Perspective does the heavy lifting: it runs a columnar data engine in WebAssembly inside a Web Worker, so the browser can filter, sort and aggregate thousands of streaming rows without blocking the page.
 
-- **One stream, many views.** `useMarketData` opens the WebSocket (reconnecting with exponential backoff) and writes into two in-browser Perspective tables: `trades` (capped at 60,000 rows) and `book` (indexed by `symbol:level`, so each snapshot overwrites rows in place). A third table, `candles`, is filled from `GET /api/candles`. Every panel is a `<perspective-viewer>` over one of those tables with a different config. Switching symbol just changes a filter.
+- **One stream, many views.** `useMarketStream` opens the WebSocket (reconnecting with exponential backoff) and writes into two in-browser Perspective tables: `trades` (capped at 60,000 rows) and `book` (indexed by `symbol:level`, so each snapshot overwrites rows in place). A third table, `candles`, is filled from `GET /api/candles`. Every panel is a `<perspective-viewer>` over one of those tables with a different config. Switching symbol just changes a filter.
 - **Watchlist:** every symbol grouped by sector with its last price and change, and a `HALTED` badge while its circuit breaker is tripped. Click a symbol to trade it. It polls `GET /api/market` once a second.
 - **News:** the latest headlines. Click a company story to jump to that symbol.
 - **Order book:** best 10 levels each side, with in-cell bars showing size at each price.
@@ -270,8 +270,8 @@ server/   Spring Boot application
             ValueTraderBot, MomentumBot, InvestorBot
 web/      React + Vite + Perspective dashboard
   src/perspective.js    starts Perspective (WebAssembly) and creates the tables
-  src/useMarketData.js  WebSocket + REST backfill -> tables
-  src/useMarket.js      polls the market summary and the news
+  src/useMarketStream.js  WebSocket + REST backfill -> tables
+  src/useMarketSummary.js polls the market summary and the news
   src/useAuth.js        who is logged in; log in, register, log out
   src/useAccount.js     polls your account while you are logged in
   src/useCandles.js     polls the candles for the chart

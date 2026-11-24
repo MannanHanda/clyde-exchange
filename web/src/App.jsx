@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { bookTable, candlesTable, tradesTable } from "./perspective.js";
-import { BOOK_DEPTH, useMarketData } from "./useMarketData.js";
+import { BOOK_DEPTH, useMarketStream } from "./useMarketStream.js";
 import Viewer from "./Viewer.jsx";
 import OrderTicket from "./OrderTicket.jsx";
 import Login from "./Login.jsx";
@@ -9,7 +9,7 @@ import Watchlist from "./Watchlist.jsx";
 import News from "./News.jsx";
 import { useAccount } from "./useAccount.js";
 import { useAuth } from "./useAuth.js";
-import { changePercent, useMarket } from "./useMarket.js";
+import { changePercent, useMarketSummary } from "./useMarketSummary.js";
 import { INTERVALS, useCandles } from "./useCandles.js";
 
 const GREEN = "#26a69a";
@@ -96,8 +96,8 @@ function Quote({ row }) {
 }
 
 export default function App() {
-    const { status, symbols } = useMarketData();
-    const { market, news } = useMarket();
+    const { status, symbols } = useMarketStream();
+    const { market, news } = useMarketSummary();
     const auth = useAuth();
     const account = useAccount(auth.user, auth.loggedOut);
     const [picked, setPicked] = useState(null);
